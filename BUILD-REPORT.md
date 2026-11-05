@@ -203,12 +203,5 @@ Third-party data (Copernicus Marine files and files derived from them) is not re
 
 ## Reproduce
 
-Set up (Python 3.12 or newer, `uv`): `uv sync`.
+See `README.md`, "Quick start" and "Results only".
 
-| Exhibit | Command | Needs |
-|---|---|---|
-| Knowledge-plane equality table | `python reproduce/equality_table.py results/knowledge > equality_table.md` | included `results/knowledge/*.json` |
-| Contrast tables, bounds, figures | `uv run python -m icsa.analysis.run --rows results/runs/scored_rows.jsonl --infra results/runs/infra.json --causes results/runs/causes.csv --cause-flags results/runs/cause_flags.csv --overhead results/analysis/overhead.json --fidelity-rows results/calibration/adapter_rows.jsonl --h3-table results/calibration/h3_table.csv --inspection-labels results/coding/labels.jsonl --inspection-coverage results/coding/coverage.jsonl --out analysis_out` | the files named, present after the campaign (an input the study did not measure is an empty file, as `icsa/analysis/run.py --help` says) |
-| Primary tables of the fixed snapshot | `python -m snapshot --help`, then `snapshot/README.md` | the campaign's store copy; the stage scripts that made the tables are in `docs/snapshot-interim/` |
-
-The anonymity of this archive was checked by `tools/artifact/build.py` on the finished archive, not on its input.
