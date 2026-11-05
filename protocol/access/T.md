@@ -1,0 +1,1 @@
+The dataset is stored on a Onedata research-data platform, in {DATASET_LOCATION}. In your sandbox, `fs = {FS_EXPR}` gives a preconfigured, authenticated fsspec filesystem for the platform. `fs.open(path, "rb")` reads a file remotely over the platform's REST API; open the returned file object with xarray (for example `xarray.open_dataset(f, engine="h5netcdf")`).

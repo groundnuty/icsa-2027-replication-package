@@ -1,0 +1,1 @@
+The dataset is stored on a Onedata research-data platform, in {DATASET_LOCATION}. In your sandbox, the platform is mounted read-only at `{MOUNT_ROOT}`, so the dataset is in {MOUNT_LOCATION}. Open a file as a local file with xarray (for example `xarray.open_dataset(path, engine="h5netcdf")`); its content is fetched from the platform as it is read.

@@ -1,0 +1,11 @@
+addpath('/work');
+disp(version());
+rand('seed',1);
+time=datenum(1982,1,1):datenum(1990,12,31);
+n=numel(time);
+SST=single(280+5*sin(2*pi*(1:n)/365.25)+randn(1,n)*0.3);
+temp=repmat(reshape(SST,1,1,n),2,2,1); temp(2,2,:)=temp(2,2,:)+single(0.1*randn(1,1,n));
+[MHW,mclim,m90,mhw_ts]=detectc(temp,time,datenum(1984,1,1),datenum(1988,12,31),datenum(1982,1,2),datenum(1990,12,30));
+disp(size(m90)); disp(squeeze(m90(1,1,[1 60 366]))');
+disp(sum(~isnan(mhw_ts(:))));
+x=reshape(1:10,1,1,10); disp(quantile(x,0.9,3));
