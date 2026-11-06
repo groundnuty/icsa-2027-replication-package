@@ -34,7 +34,7 @@ Derived from `handle_4/prior-study-replication-package` @ `06223f16181d53681b17e
   thinking blocks returned verbatim with tool results.
 
 ## Sampling and reasoning sources
-In `config/models.toml`, per model, with URL and section. site-m has no vendor sampling
+In `config/models.toml`, per model, with URL and section. GLM-5.3-Flash has no vendor sampling
 recommendation (benchmark footnotes only), so none is set. Gemma FP8 alias guidance, DeepSeek
 reasoning-passback and default effort are UNVERIFIED on the cards. Hugging Face cards were read
 through a page summariser: re-check the numbers against the raw cards before freezing.

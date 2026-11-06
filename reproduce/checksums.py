@@ -1,7 +1,7 @@
-"""Verify (default) or write SHA256SUMS: the sha256 of every file of this package except SHA256SUMS itself.
+"""Verify (default) or write checksums.sha256: the sha256 of every file of this package except checksums.sha256 itself.
 
-    python3 reproduce/checksums.py            # verify; the last line reads `verify: all N files match SHA256SUMS`
-    python3 reproduce/checksums.py --write    # rewrite SHA256SUMS from the files on disk
+    python3 reproduce/checksums.py            # verify; the last line reads `verify: all N files match checksums.sha256`
+    python3 reproduce/checksums.py --write    # rewrite checksums.sha256 from the files on disk
 
 Standard library only. Files under .git/, build/ (where the checks write) and .venv/ are not listed.
 """
@@ -12,7 +12,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SUMS = ROOT / "SHA256SUMS"
+SUMS = ROOT / "checksums.sha256"
 SKIP_DIRS = {".git", ".draft", "build", "__pycache__", ".venv"}
 
 
@@ -20,7 +20,7 @@ def files() -> list[str]:
     out = []
     for p in ROOT.rglob("*"):
         rel = p.relative_to(ROOT)
-        if p.is_file() and not set(rel.parts) & SKIP_DIRS and rel.as_posix() != "SHA256SUMS":
+        if p.is_file() and not set(rel.parts) & SKIP_DIRS and rel.as_posix() != "checksums.sha256":
             out.append(rel.as_posix())
     return sorted(out)
 
@@ -36,7 +36,7 @@ def sha256(path: pathlib.Path) -> str:
 def main(argv: list[str]) -> int:
     if argv[1:] == ["--write"]:
         SUMS.write_text("".join(f"{sha256(ROOT / f)}  {f}\n" for f in files()), encoding="utf-8")
-        print(f"wrote SHA256SUMS: {len(files())} files")
+        print(f"wrote checksums.sha256: {len(files())} files")
         return 0
     if argv[1:]:
         print(__doc__)
@@ -54,7 +54,7 @@ def main(argv: list[str]) -> int:
     if bad:
         print(f"verify: FAILED, {len(bad)} of {len(want)} entries")
         return 1
-    print(f"verify: all {len(want)} files match SHA256SUMS")
+    print(f"verify: all {len(want)} files match checksums.sha256")
     return 0
 
 

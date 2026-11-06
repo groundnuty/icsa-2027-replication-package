@@ -6,7 +6,7 @@
     python -m icsa.inspection.coverage ... --sealed SEALED --unseal ...                                                       # after the block
 
 The rule. No Codex API: the Codex coder is the subscription CLI only.
-1. Every site_j SUBJECT run first, coded by Sol + Opus. A subject model never judges its own runs, so a Sonnet run may never
+1. Every Claude Sonnet 5.5 SUBJECT run first, coded by Sol + Opus. A subject model never judges its own runs, so a Sonnet run may never
    get Opus + Sonnet.
 2. Then the rest, in one seeded order over the PLANNED matrix, balanced per option x layout x model. Sol + Opus code until the ChatGPT
    plan's window reaches 95% used (the quota gate, `QuotaGate`). Then: no new Sol dispatch; the closing is posted once; the gate waits about
@@ -55,7 +55,7 @@ Balance. The strata (option x layout x model) are not equal (150 runs per main c
 condition: in every prefix of a section, a stratum's count c satisfies |c - n * size / total| < 1 (for equal strata: the counts differ by at
 most one). `_interleave` meets it by earliest-deadline scheduling over each stratum's k-th run's window, and checks it before it returns.
 Assumptions stated: the plan covers the blocks `main` and `pagination` (the pilot keeps Sol + Opus and K is untouched, `--pair`); the
-sections are "the runs whose subject model is site_j" and "the rest".
+sections are "the runs whose subject model is Claude Sonnet 5.5" and "the rest".
 """
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ def pair_name(pair) -> str | None:
 
 
 def is_sonnet_subject(model) -> bool:
-    """A subject run of site_j. Matched on the word, not the exact id, because the one error that must never happen is Sonnet
+    """A subject run of Claude Sonnet 5.5. Matched on the word, not the exact id, because the one error that must never happen is Sonnet
     coding a Sonnet run: a spelling this code did not foresee has to count as Sonnet."""
     return "sonnet" in str(model or "").lower()
 

@@ -82,7 +82,7 @@ No test. `h4_per_model_effects.csv`: each contrast's per-model effect with its r
 resample) for every contrast outcome, plus bytes between sites on the log2 scale (as tokens; `effect_ratio` is the geometric-mean
 ratio), per layout, and whether it agrees in sign with the pooled direction. `h4_directions.csv`: per contrast, the pooled effect and
 CI, the models with an effect and those agreeing in sign (signs on the 12-decimal grid; a pooled 0 has no direction), and the
-cheaper and the stronger tier side by side (`secondary.H4_TIER_PAIR`: site-i, site-j, parameters.md's tier A).
+cheaper and the stronger tier side by side (`secondary.H4_TIER_PAIR`: claude-haiku-5-5, claude-sonnet-5-5, parameters.md's tier A).
 
 ## Infrastructure failures (parameters.md, "Infrastructure failures")
 

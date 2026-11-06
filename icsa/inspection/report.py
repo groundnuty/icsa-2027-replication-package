@@ -700,7 +700,7 @@ LIMITATIONS = [
     "coders cannot be blind to the option",
     "set C skews towards vectorised code, so it measures the coders on the easier part of the population",
     "the extraction relies on reading code, not executing it",
-    "Claude Opus 5.5 shares a vendor with two subject models (site_i, site_j); "
+    "Claude Opus 5.5 shares a vendor with two subject models (Claude Haiku 5.5, Claude Sonnet 5.5); "
     "agreement is reported per subject model",
 ]
 INDEPENDENT_CHECK = {"status": "not built",

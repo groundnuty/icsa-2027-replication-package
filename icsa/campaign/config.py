@@ -13,30 +13,30 @@ from typing import Any
 
 from icsa.records import Layout, Option
 
-PILOT_MODEL = "site_ab"
+PILOT_MODEL = "Qwen3.8-27B"
 # Reporting name -> endpoint key (the `model` field of ~/icsa-paths/endpoints.json).
 # The run record keeps the reporting name (RunId.model) and the API id (model_api_id).
 OPEN_MODELS = {
-    "site_ab": "qwen",
-    "site_aa": "qwencoder",
-    "site_k": "deepseek",
-    "site_m": "glm",
-    "site_l": "gemma",
+    "Qwen3.8-27B": "qwen",
+    "Qwen3-Coder-30B-A3B": "qwencoder",
+    "DeepSeek-V4-Flash-0731": "deepseek",
+    "GLM-5.3-Flash": "glm",
+    "Gemma-4-31B": "gemma",
 }
 MODEL_API_IDS = {
-    "site_ab": "Qwen/site_ab",
-    "site_aa": "Qwen/site_aa-Instruct",
-    "site_k": "deepseek-ai/site_k",
-    "site_m": "zai-org/site_m",
-    "site_l": "google/site_l",
-    "site_i": "site_i",
-    "site_j": "site_j",
+    "Qwen3.8-27B": "Qwen/Qwen3.8-27B",
+    "Qwen3-Coder-30B-A3B": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "DeepSeek-V4-Flash-0731": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "GLM-5.3-Flash": "zai-org/GLM-5.3-Flash",
+    "Gemma-4-31B": "google/gemma-4-31B",
+    "claude-haiku-5-5": "claude-haiku-5-5",
+    "claude-sonnet-5-5": "claude-sonnet-5-5",
 }
-CLAUDE_MODELS = ("site_i", "site_j")
+CLAUDE_MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5")
 ALL_MODELS = tuple(OPEN_MODELS) + CLAUDE_MODELS
 # S2 priority tiers (protocol c44c52a): A runs before B
-TIER_A = ("site_ab", "site_i", "site_j")
-TIER_B = ("site_l", "site_m", "site_k", "site_aa")
+TIER_A = ("Qwen3.8-27B", "claude-haiku-5-5", "claude-sonnet-5-5")
+TIER_B = ("Gemma-4-31B", "GLM-5.3-Flash", "DeepSeek-V4-Flash-0731", "Qwen3-Coder-30B-A3B")
 
 
 def _anthropic_caps_from_harness() -> dict[str, int]:
@@ -154,8 +154,8 @@ class Price:
 PRICE_SOURCE = ("claude-api skill pricing reference (models table cached 2026-10-06; prompt-caching economics), "
                 "read 1 Nov 2026; Anthropic first-party API rates")
 CAMPAIGN_PRICES: dict[str, Price] = {
-    "site_j": Price(2.0, 10.0, PRICE_SOURCE, cache_read_per_mtok=0.20, cache_write_1h_per_mtok=4.0),
-    "site_i": Price(0.10, 0.50, PRICE_SOURCE, cache_read_per_mtok=0.01, cache_write_1h_per_mtok=0.20,
+    "claude-sonnet-5-5": Price(2.0, 10.0, PRICE_SOURCE, cache_read_per_mtok=0.20, cache_write_1h_per_mtok=4.0),
+    "claude-haiku-5-5": Price(0.10, 0.50, PRICE_SOURCE, cache_read_per_mtok=0.01, cache_write_1h_per_mtok=0.20,
                               long_above_tokens=100_000, long_input_per_mtok=0.50, long_output_per_mtok=2.50,
                               long_cache_read_per_mtok=0.05, long_cache_write_1h_per_mtok=1.00),
     "claude-opus-5-5": Price(4.0, 20.0, PRICE_SOURCE, cache_read_per_mtok=0.20, cache_write_1h_per_mtok=8.0),
@@ -299,8 +299,8 @@ class CampaignConfig:
     # Sonnet gating (operator, 2 Nov 01:15Z; scheduling only, see gate.py): main-block Sonnet runs wait for `gate_calibration_runs` priced
     # calibration Sonnet runs and the first `gate_haiku_runs` Haiku main runs; a projected Claude total above `gate_max_usd` (or an
     # unknown one) holds Sonnet until `gate_release_file` is written, after that outcome: one older than it does not count. gate_model None = no gate.
-    gate_model: str | None = "site_j"
-    gate_haiku_model: str = "site_i"
+    gate_model: str | None = "claude-sonnet-5-5"
+    gate_haiku_model: str = "claude-haiku-5-5"
     gate_calibration_runs: int = 6
     gate_haiku_runs: int = 50
     gate_max_usd: float = 5000.0
@@ -334,8 +334,8 @@ class CampaignConfig:
     # concurrency caps (PLACEHOLDER: from the load test). A model absent here has no site_b backend.
     # No slots file: always up unless requests fail; paused after repeated 5xx/429.
     site_b_caps: dict[str, int] = dataclasses.field(default_factory=lambda: {
-        "site_ab": 8, "site_m": 8, "site_k": 2,
-        "site_l": 4, "site_aa": 4})
+        "Qwen3.8-27B": 8, "GLM-5.3-Flash": 8, "DeepSeek-V4-Flash-0731": 2,
+        "Gemma-4-31B": 4, "Qwen3-Coder-30B-A3B": 4})
     site_b_base_url: str = "https://host-26.invalid/api/v1"
     endpoint_fail_threshold: int = 3      # consecutive endpoint infra failures that pause a backend unit
     endpoint_pause_s: float = 300.0       # dispatch pause of the affected unit (HPC slot, site_b model, Claude model)

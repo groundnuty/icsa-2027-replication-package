@@ -21,7 +21,7 @@ Everything here is identical across options and layouts.
 | Invalid tool-call arguments | unparseable arguments are replaced in the history by a valid placeholder, and the agent receives an "invalid arguments" tool result. This counts as a tool round, identically for every model and option. Counted per run (`invalid_tool_args_rounds`) |
 | Run order and drop order (decided 1 Nov; replaces the proposal's "first the pagination cell, then S2") | The campaign runs in two blocks, each in randomised order. The block structure makes the drop order automatic: whatever is unfinished when time runs out is always the lowest-priority remainder.
   - **Block 1, protected:** the main S1 cells and the pagination cell, interleaved. Never dropped. The pagination cell is the evidence for the complete-listing remedy.
-  - **Block 2, S2, in two tiers.** Tier A: site-ab, site-i and site-j, which keeps the pilot model and the cheaper/stronger tier pair of H4. Tier B: the other four models.
+  - **Block 2, S2, in two tiers.** Tier A: Qwen3.8-27B, Claude Haiku 5.5 and Claude Sonnet 5.5, which keeps the pilot model and the cheaper/stronger tier pair of H4. Tier B: the other four models.
   - **If time runs out,** S2 is first reduced to tier A. Unfinished runs are reported, never imputed.
 
   Options stay randomised within every block and tier, so option contrasts are unaffected. Only layout and model comparisons are time-ordered; they are secondary or descriptive. |

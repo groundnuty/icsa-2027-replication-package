@@ -134,7 +134,7 @@ class HarnessConfig:
         for m in self.models.values():
             if key_or_name in (m.reported_name, m.api_id):
                 return m
-        low = key_or_name.lower()      # the campaign's reporting names ("site_ab") differ in case from reported_name
+        low = key_or_name.lower()      # the campaign's reporting names ("Qwen3.8-27B") differ in case from reported_name
         for m in self.models.values():
             if low in (m.key.lower(), m.reported_name.lower(), m.api_id.lower()):
                 return m

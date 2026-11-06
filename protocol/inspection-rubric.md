@@ -22,7 +22,7 @@ The sets are mixed into one queue in seeded random order. Nothing in a packet sh
 - **Codex `gpt-6-astra`**, reasoning effort high, read-only sandbox.
 - **Claude Opus 5.5 (`claude-opus-5-5`)**, adaptive thinking, effort high.
 
-Each coder gets every packet in a fresh context. They work independently, with the same prompt (hashed and archived) and the same packet. Neither is a subject model. Opus shares a vendor with two subject models (site-i, site-j), which is stated, and agreement is reported per subject model. Every packet and answer is archived for the artifact.
+Each coder gets every packet in a fresh context. They work independently, with the same prompt (hashed and archived) and the same packet. Neither is a subject model. Opus shares a vendor with two subject models (Claude Haiku 5.5, Claude Sonnet 5.5), which is stated, and agreement is reported per subject model. Every packet and answer is archived for the artifact.
 
 ## 3. Packet
 
@@ -40,7 +40,7 @@ Each coder gets every packet in a fresh context. They work independently, with t
 - any other run.
 
 **Sanitised, with semantics kept:** run, scenario, directory and model identifiers in paths, comments and output are replaced by neutral tokens, consistently within a packet.
-**Before use:** every rendered packet is scanned for residual cues (set or label words, scenario names, expected-answer assertions). A random 10% of rendered packets, K-test and real mixed, is read for cues by a reviewer who has not written K-test cases and will not see the coders' answers before the gate: a fresh site-j subagent in the code agent's session. It reports only cues found, not the cases' content. The science agent reads packets only after the gate.
+**Before use:** every rendered packet is scanned for residual cues (set or label words, scenario names, expected-answer assertions). A random 10% of rendered packets, K-test and real mixed, is read for cues by a reviewer who has not written K-test cases and will not see the coders' answers before the gate: a fresh Claude Sonnet 5.5 subagent in the code agent's session. It reports only cues found, not the cases' content. The science agent reads packets only after the gate.
 
 **Unavoidable:** the access paragraph of the prompt, and the code itself, show the option.
 

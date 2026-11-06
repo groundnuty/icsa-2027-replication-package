@@ -2,7 +2,7 @@
 
 Code, protocol texts, instance definitions, reports and results of the study, anonymised for double-blind review.
 Provider and service names are replaced by neutral labels; the table that maps them is not part of the artifact.
-Source commit: `bbd0ba6330c2` (history not included). Files with names changed: 229.
+Source commit: `349199dabbb9` (history not included). Files with names changed: 265.
 
 ## What is included
 
@@ -27,7 +27,7 @@ Source commit: `bbd0ba6330c2` (history not included). Files with names changed: 
 | `icsa/faults` | Fault injection for the platform-record calibration |
 | `icsa/dossier` | Dossier of the study's design decisions |
 | `icsa/analysis` | Pre-registered analysis pipeline and exhibits |
-| `icsa/instruments` | Read- and analysed-extent instruments and omission labeller (instrument audit) |
+| `icsa/instruments` | Read- and analysed-extent instruments and omission labeller |
 | `icsa/calibration` | Fault-injection calibration of the read record |
 | `icsa/pipeline` | Scripted pipeline and concurrency curve |
 | `sandbox/Dockerfile` | Sandbox image definition (base image pinned by digest) |
@@ -71,8 +71,15 @@ Source commit: `bbd0ba6330c2` (history not included). Files with names changed: 
 | `octave_domain` | Octave side of the reference-domain criterion: shards, shard-invariance check, criterion and packing scripts |
 | `evidence` | Evidence logs of the knowledge plane and the slot seam |
 | `README.md` | Repository overview |
+| `results/validation/9-instruments` | Instrument validation: the measuring instruments checked against known answers (this is the validation of the instruments, not an audit of the runs) |
+| `results/faults-live` | Fault-injection calibration of the platform's record per option: live runs |
+| `results/faults-batch` | Fault-injection calibration of the platform's record per option: batch rescoring |
 
 `MANIFEST.json` lists every file with its sha256 and the purpose of the entry it belongs to.
+
+## Work that was not done as designed
+
+The instrument audit of the registered design (a stratified sample read blind, with error rates per instrument) was not run as designed, and no file in this artifact is its result. Its role is filled by the blind inspection: known-answer scores, pair agreement and the numeric replay, shipped as coding data under `results/coding/` and labelled as such. The files under `results/validation/9-instruments` are the validation of the instruments against known answers, not that audit.
 
 ## Not yet present
 
@@ -84,9 +91,7 @@ These entries exist in the build but had no files in the source commit, so this 
 | `results/traces` | All run traces (by manifest with sha256) |
 | `results/runs` | Run records and scored rows |
 | `results/analysis` | Analysis outputs: tables, figures and manifest |
-| `results/instrument-audit` | Instrument audit |
-| `results/calibration` | Fault-injection calibration and read-record calibration |
-| `results/coding` | Coding data for the cause analysis |
+| `results/coding` | Coding data: the blind inspection (known-answer scores, pair agreement, the numeric replay) and the second coder's packets, from the final snapshot |
 | `results/reference-validation` | Reference validation results |
 | `results/pilot` | Pilot runs and the power re-estimate |
 | `notebooks` | Analysis notebooks |
@@ -107,6 +112,7 @@ These entries exist in the build but had no files in the source commit, so this 
 | `config/slot_map.json, config/campaign_hosts.example.*, config/provider-watch.example.json` | Host and slot identifiers of the run fleet |
 | `tools/b_launch, tools/provider_watch, tools/provider_mon*, tools/newhost, tools/host_split.py` | Fleet operation tools, not needed to regenerate any exhibit |
 | `data/instances/sea_masks.npz, *.nc` | Third-party-derived data: scripts only until the terms are confirmed |
+| `k76-stub (7.6 GB)` | The known-answer stub, too large for the draft; the run outputs it was made from are included under results/coding/k/k76-runs |
 | `reports/octave_domain/step3/events_mean_series.f64` | A 122 KB raw float64 series of the whole-domain Octave run, a numeric binary like the other binary data files; its sha256 stays in reports/octave_domain/step3/outputs.sha256 and the whole-domain result is in results/reference-validation/octave-domain/domain.json |
 
 ## Left out by size
@@ -124,11 +130,9 @@ Files that differ from what ran (before the mapping), 2:
 - `icsa/faults/mainaudit/provider.py`
 - `icsa/faults/records/audit.py`
 
-Files the mapping rewrote (names and private terms replaced; applying the mapping to the file that ran gives exactly the file shipped here), 66:
+Files the mapping rewrote (names and private terms replaced; applying the mapping to the file that ran gives exactly the file shipped here), 64:
 
-- `icsa/analysis/README.md`
 - `icsa/analysis/exhibits.py`
-- `icsa/analysis/secondary.py`
 - `icsa/campaign/boverride.py`
 - `icsa/campaign/budget.py`
 - `icsa/campaign/cli.py`

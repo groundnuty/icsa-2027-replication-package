@@ -11,11 +11,11 @@ every analysis table from the shipped results.
 
 ```bash
 uv sync       # Python 3.12 or newer; installs the locked dependencies from uv.lock
-make check    # verify SHA256SUMS, regenerate every analysis table, compare each with the shipped file
+make check    # verify checksums.sha256, regenerate every analysis table, compare each with the shipped file
 ```
 
 The last line reads `check: all N tables byte-identical to the shipped files`. It needs no network after `uv sync`, no campaign store, no model and no
-data platform. `make verify` alone checks the files against `SHA256SUMS` with the Python standard library.
+data platform. `make verify` alone checks the files against `checksums.sha256` with the Python standard library.
 
 The study gives LLM agents one data-analysis task (detecting marine heatwaves in a region of sea-surface-temperature data) and changes only where the
 agent meets the data, on a research-data platform:
@@ -45,8 +45,8 @@ There are three ways to use this package:
 | Path | Contents |
 |---|---|
 | `README.md`, `VERIFICATION.md`, `ENVIRONMENT.md` | This overview; how the files and the anonymity were checked; the software and hardware the study ran on |
-| `Makefile`, `reproduce/` | `make check` and its scripts: `regenerate.py` (the analysis tables), `checksums.py` (`SHA256SUMS`), `equality_table.py` |
-| `SHA256SUMS` | The sha256 of every file in this package |
+| `Makefile`, `reproduce/` | `make check` and its scripts: `regenerate.py` (the analysis tables), `checksums.py` (`checksums.sha256`), `equality_table.py` |
+| `checksums.sha256` | The sha256 of every file in this package |
 | `BUILD-REPORT.md`, `MANIFEST.json` | What the anonymising build included and left out, why, and which files it rewrote; every file with its sha256 and purpose |
 | `MISSING.md` | What this copy of the package does not hold, and why |
 | `protocol/` | The registered protocol texts: the task prompt, the per-option access texts, the frozen parameters, the report specification, the inspection rubric, and every dated amendment (`AMENDMENTS.md`) |
@@ -64,24 +64,26 @@ There are three ways to use this package:
 
 `make check` runs three steps:
 
-1. `reproduce/checksums.py` verifies every file against `SHA256SUMS`.
-2. `reproduce/regenerate.py` reads `results/analysis/pipeline/` (one scored row per analysed run, the coded causes, the cause flags, the
-   infrastructure export) and `results/analysis/inputs/` (the counted start of each run, the enforcement overhead, the fault-injection fidelity rows and
+1. `reproduce/checksums.py` verifies every file against `checksums.sha256`.
+2. `reproduce/regenerate.py` reads `results/analysis/<snapshot>/pipeline/` (one scored row per analysed run, the coded causes, the cause flags, the
+   infrastructure export) and `results/analysis/<snapshot>/inputs/` (the counted start of each run, the enforcement overhead, the fault-injection fidelity rows and
    H3 table, the coders' inspection labels and coverage). It then repeats what the snapshot tool did after scoring: it recounts the cohort against the
    snapshot's cut, calls the pre-registered analysis (`icsa.analysis.run.run_all`) with the default configuration, and stamps each table with the
    snapshot's header line.
-3. It compares every regenerated file with the shipped one under `results/analysis/tables/`. Tables and the manifest must be byte-identical; a
-   figure whose bytes differ is reported, not failed, because PNG bytes depend on the plotting library's build.
+3. It compares every regenerated file with the shipped one under `results/analysis/<snapshot>/tables/`. Tables must be byte-identical. The manifest is compared field by
+   field: the fields that name the checkout and the Python and library versions are reported, not compared, and so is a hash of an input that the
+   anonymisation rewrote after the analysis read it. A figure whose bytes differ is reported, not failed, because PNG bytes depend on the plotting
+   library's build. `<snapshot>` is the snapshot's folder name; there is one.
 
 The scored rows themselves come from the run directories through the scoring pipeline (`icsa/pipeline`, `icsa/scoring`, `snapshot/run.py`); the run
 directories are not shipped whole (see below), so this step is checked on the sampled traces, not regenerated.
 
 ## Read the evidence
 
-- `results/traces/`: ten whole runs per option × layout × model, chosen by a seeded order of the run keys alone, from the runs that had ended. Each
+- `results/traces/`: up to ten whole runs per option × layout × model (`BUILD-REPORT.md` says if the sample was cut to fit, and to how many), chosen by a seeded order of the run keys alone, from the runs that had ended. Each
   archive holds the run's whole directory (every attempt): the agent's transcript, the code it ran, the instruments' records and the run record; the
   raw read-performance logs are replaced by a per-run summary. Model API signatures, platform file identifiers and host names are replaced by labels;
-  `VERIFICATION.md` lists every rule. The run's scored row is the line with its key in `results/analysis/pipeline/scored_rows.jsonl`.
+  `VERIFICATION.md` lists every rule. The run's scored row is the line with its key in `results/analysis/<snapshot>/pipeline/scored_rows.jsonl`.
 - `results/coding/`: the blind inspection of the runs whose label the instruments could not settle: the coders' decisions with their extents and
   extractions, the agreement between the two coders, the numeric replay of their extents, and the known-answer set that scored the coders. The second
   coder's packets and codebook are included; the key that maps a packet to its run is not, while the sheet is still being read blind.

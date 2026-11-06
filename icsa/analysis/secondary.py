@@ -534,7 +534,7 @@ def tracking_budget_sensitivity(df: pd.DataFrame, cfg: Config, bootstrap: bool =
 
 # ------------------------------------------------------------------------ H4: directions across models (descriptive)
 # parameters.md, block 2, tier A: the cheaper/stronger tier pair of H4 (reported names, config/models.toml). Not a registered constant.
-H4_TIER_PAIR = ("site_i", "site_j")
+H4_TIER_PAIR = ("claude-haiku-5-5", "claude-sonnet-5-5")
 # bytes between sites (19(g)) on the log2 scale, like tokens: a per-model effect is a mean log2 ratio. Descriptive only: never tested.
 H4_BYTES = C.Outcome("bytes_between_sites", "log2_bytes", False, "log2", None)
 _KEY = ["outcome", "layout", "contrast"]

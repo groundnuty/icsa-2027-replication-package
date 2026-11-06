@@ -26,7 +26,7 @@ CODEX_MODEL, CODEX_EFFORT = "gpt-6.1-sol", "high"        # amendment 23 (science
 CLAUDE_MODEL, CLAUDE_EFFORT = "claude-opus-5-5", "high"
 # The fallback pair's second coder (amendment 26, science, #76, 23:23Z): Opus + Sonnet, where the plan's Codex quota runs out. It may
 # never code a Sonnet run: a subject model does not judge its own runs.
-SONNET_MODEL, SONNET_EFFORT = "site_j", "high"
+SONNET_MODEL, SONNET_EFFORT = "claude-sonnet-5-5", "high"
 CLAUDE_MAX_TOKENS = 64000       # the request's max_tokens, thinking included: the most one call can output (the campaign's spend bound reads it)
 CODEX_TIMEOUT_S = 1800
 # Features a blind coder must not have (codex 0.166.0, `codex features list`, 2 Nov): through host-15.invalid, the model host the
@@ -55,7 +55,7 @@ SECRET_FILES = (ANTHROPIC_KEY_PATH, "~/.agent_framework/keys/handle_4/handle_5.p
 # USD per million tokens, from the claude-api skill's model table (cached 2026-10-06); a cache write (5-minute) is 1.25x input.
 CLAUDE_PRICES_BY_MODEL = {
     "claude-opus-5-5": {"input": 4.0, "output": 20.0, "cache_read": 0.20, "cache_write": 5.0},
-    "site_j": {"input": 2.0, "output": 10.0, "cache_read": 0.20, "cache_write": 2.50},
+    "claude-sonnet-5-5": {"input": 2.0, "output": 10.0, "cache_read": 0.20, "cache_write": 2.50},
 }
 
 # Codex JSONL item types that mean the coder acted on the world instead of only answering.

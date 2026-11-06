@@ -5,21 +5,22 @@ and holds no secret.
 
 ## Files
 
-`SHA256SUMS` holds the sha256 of every file; `make verify` (`reproduce/checksums.py`, standard library) recomputes them. `MANIFEST.json` lists every
+`checksums.sha256` holds the sha256 of every file; `make verify` (`reproduce/checksums.py`, standard library) recomputes them; `sha256sum -c checksums.sha256` does the same. `MANIFEST.json` lists every
 file of the anonymising build with its sha256 and the purpose of the entry it belongs to.
 
 ## Tables
 
-`make check` regenerates every analysis table of the fixed snapshot from `results/analysis/pipeline/` and `results/analysis/inputs/` and compares it
-byte for byte with `results/analysis/tables/` (README, "Results only"). The analysis is deterministic: its bootstrap is seeded from the configuration.
-`results/analysis/inputs/inputs.json` names the source of every input in the snapshot and its sha256, and the recount of the cohort is checked against
-the totals the snapshot recorded.
+`make check` regenerates every analysis table of the fixed snapshot from `results/analysis/<snapshot>/pipeline/` and `results/analysis/<snapshot>/inputs/` and compares it
+byte for byte with `results/analysis/<snapshot>/tables/` (README, "Results only"). The analysis is deterministic: its bootstrap is seeded from the configuration.
+`results/analysis/<snapshot>/inputs/inputs.json` names the source of every input in the snapshot and its sha256, and the recount of the cohort is checked against
+the totals the snapshot recorded. The tables' `manifest.json` is compared field by field: the fields that name the checkout and the Python
+and library versions are reported, not compared, and an input hash is compared only when the shipped input still has that hash.
 
 ## Code
 
 The code was compared with the code that ran. `BUILD-REPORT.md`, "What ran, and how this tree differs", names the commit that ran for each part of
 `icsa/`, lists the files that differ from it before anonymisation, and lists the files that the anonymisation rewrote: applying the same mapping to the
-file that ran gives exactly the file shipped here. The fixed snapshot records the code it ran (`results/analysis/SNAPSHOT.json`, `snapshot_code`).
+file that ran gives exactly the file shipped here. The fixed snapshot records the code it ran (`results/analysis/<snapshot>/SNAPSHOT.json`, `snapshot_code`).
 
 ## Anonymity and secrets
 
@@ -50,14 +51,27 @@ containers (zip, tar, gzip, PDF, PNG text chunks, notebooks):
 - secrets: token shapes (API keys, platform tokens, JWT, PEM blocks, `key = value` assignments, long high-entropy strings), and every file of the
   study's credential directories, by name and by the sha256 of its content.
 
-**Rules that apply to trace files only** (`results/traces/`), each counted in the build report, each with test cases ("canaries") that must still fail
-the build:
-1. a JSON list is not read as one joined string by the entropy and address rules unless at least two of its elements look random (each element is still
-   scanned alone);
-2. an identifier made only of words, numbers, short identifiers and hex identifiers is not taken for a key;
-3. six dashed groups of decimal digits (a timestamp) are not taken for a MAC address.
+**Rules that relax the scan.** Each is counted by the scan, and each has test cases ("canaries") that must still fail the build. Token shapes and
+the exact-match secret checks are never relaxed, and code (everything outside `results/`, `reports/` and `MANIFEST.json`) gets only rules 6 to 8.
 
-One more narrow rule: in files named `*.sha256`, on lines of exactly `<64 hex digits> <path>`, the path is not read by the entropy rule; names, hosts,
-addresses and secrets are still checked there. Exact-match secret checks have no exception anywhere.
+In the trace sample (`results/traces/`):
+1. the joined view of a JSON string list (its elements run together, to catch a token split over elements) is not read by the entropy and MAC rules
+   unless at least two of its elements look random; each element is still scanned alone with every rule;
+2. a dashed string of six pairs of decimal digits (a date and time) is not taken for a MAC address;
+3. in the platform client's logs, the name right after `for new file ` is the name of a file the run created, not a key.
+
+In the trace sample and in every file under `results/` and `reports/` and in `MANIFEST.json`:
+
+4. an identifier made only of words, numbers, short identifiers and hex identifiers (a container name, a quoted path, an argument list) is not taken
+   for a key;
+5. a candidate with a `/` together with a `-` or `_`, and no `+`, cannot be base64 of either alphabet, so it is read as a path, not a key.
+
+Anywhere:
+
+6. in files named `*.sha256`, on lines of exactly `<64 hex digits> <path>`, the path is not read by the entropy rule;
+7. a MAC candidate that mixes `:` and `-` (a time range such as `10:24:54-11:03:30`) is not a MAC;
+8. an IPv6 candidate of at most six digits and colons next to a hyphen and a digit (`::-1`, a slice in code) is not an address (not counted).
+
+Names, hosts, addresses and secrets are still checked on every line these rules touch.
 
 The scan prints counts per check, never a found value. Its result for this copy: every check passed.

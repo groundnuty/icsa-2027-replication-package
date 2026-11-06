@@ -1,6 +1,6 @@
 """Regenerate the analysis tables of the fixed snapshot from the shipped inputs, and compare them with the shipped tables.
 
-    uv run python reproduce/regenerate.py [--snapshot results/analysis] [--out build/tables] [--check]
+    uv run python reproduce/regenerate.py [--snapshot results/analysis/<snapshot>] [--out build/tables] [--check]
 
 This repeats, step by step, what the snapshot tool (`snapshot/run.py`, function `analyse`) did after its pipeline had scored the runs:
 
@@ -172,14 +172,30 @@ def compare(shipped: pathlib.Path, made: pathlib.Path, snap: pathlib.Path) -> in
     return 0
 
 
+def find_snapshot(analysis: pathlib.Path) -> pathlib.Path | str:
+    """The one snapshot folder under results/analysis/ (the one holding SNAPSHOT.json), or why there is none to use."""
+    found = sorted(p.parent for p in analysis.glob("*/SNAPSHOT.json"))
+    if not found:
+        return f"no snapshot under {analysis}: the results of the fixed snapshot are not in this copy yet (see MISSING.md)"
+    if len(found) > 1:
+        return f"{len(found)} snapshots under {analysis} ({', '.join(p.name for p in found)}): name one with --snapshot"
+    return found[0]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--snapshot", type=pathlib.Path, default=ROOT / "results" / "analysis")
+    ap.add_argument("--snapshot", type=pathlib.Path, help="the snapshot's folder (default: the one folder under results/analysis/ with a SNAPSHOT.json)")
     ap.add_argument("--out", type=pathlib.Path, default=ROOT / "build" / "tables")
     ap.add_argument("--check", action="store_true", help="compare the regenerated tables with the shipped ones")
     a = ap.parse_args(argv)
+    if a.snapshot is None:
+        found = find_snapshot(ROOT / "results" / "analysis")
+        if isinstance(found, str):
+            print(found, file=sys.stderr)
+            return 2
+        a.snapshot = found
     if not (a.snapshot / "SNAPSHOT.json").is_file():
-        print(f"no snapshot at {a.snapshot}: the results of the fixed snapshot are not in this copy yet (see MISSING.md)", file=sys.stderr)
+        print(f"no SNAPSHOT.json in {a.snapshot}", file=sys.stderr)
         return 2
     res = regenerate(a.snapshot, a.out)
     print(f"regenerated {res['files']} files from {res['rows']} scored rows into {a.out}"

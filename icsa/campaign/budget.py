@@ -64,8 +64,8 @@ def load_measurements(paths: list[str | Path]) -> dict[tuple[str, str], dict[int
             st = bench.level_stats(res)
             prefix = res["model"].split("/")[-1]
             up = [s for s in res.get("slots_at_start", []) if s.get("up") and s.get("slot", "").split("-")[0] ==
-                  {"site_ab": "qwen", "site_l": "gemma", "site_m": "glm",
-                   "site_k": "deepseek", "site_aa": "qwencoder"}.get(API_TO_NAME[res["model"]], "-")]
+                  {"Qwen3.8-27B": "qwen", "Gemma-4-31B": "gemma", "GLM-5.3-Flash": "glm",
+                   "DeepSeek-V4-Flash-0731": "deepseek", "Qwen3-Coder-30B-A3B": "qwencoder"}.get(API_TO_NAME[res["model"]], "-")]
             st.update(started_utc=res.get("started_utc"), ended_utc=res.get("ended_utc"), slot=res.get("slot"),
                       slots_up=len(up), source=str(f))
             out.setdefault((API_TO_NAME[res["model"]], res["backend"]), {})[res["level"]] = st
