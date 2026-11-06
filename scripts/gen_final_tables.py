@@ -4,7 +4,11 @@ Usage: python3 -I gen_final_tables.py <seal> [coded-dir]
 import csv, json, sys, os, math, collections, statistics as st
 S = sys.argv[1]
 CD = sys.argv[2] if len(sys.argv) > 2 else ('out-coded-kaug' if os.path.isdir(os.path.join(S, 'out-coded-kaug')) else 'out-coded')
-T = os.path.join(S, CD, 'tables'); J = lambda *p: os.path.join(S, *p)
+T = os.path.join(S, CD, 'tables')
+def J(*p):
+    # in this package the coding data sit under results/coding/, beside results/analysis/<snapshot>/
+    q = os.path.join(S, *p); alt = os.path.join(S, '..', '..', 'coding', *p)
+    return q if os.path.exists(q) or not os.path.exists(alt) else alt
 def rd(path):
     if not os.path.exists(path): return []
     L = open(path).read().splitlines(); return list(csv.DictReader(L[1:] if L and L[0].startswith('#') else L))

@@ -14,7 +14,7 @@ uv sync       # Python 3.12 or newer; installs the locked dependencies from uv.l
 make check    # verify checksums.sha256, regenerate every analysis table, compare each with the shipped file
 ```
 
-The last line reads `check: all N tables byte-identical to the shipped files`. It needs no network after `uv sync`, no campaign store, no model and no
+The last line reads `check: all 4 result folders passed`. It takes about 15 minutes on a multi-core machine (about 40 CPU-minutes, under 6 GB of memory) and needs no network after `uv sync`, no campaign store, no model and no
 data platform. `make verify` alone checks the files against `checksums.sha256` with the Python standard library.
 
 The study gives LLM agents one data-analysis task (detecting marine heatwaves in a region of sea-surface-temperature data) and changes only where the
@@ -86,7 +86,7 @@ directories are not shipped whole (see below), so this step is checked on the sa
 
 ## Read the evidence
 
-- `results/traces/`: up to ten whole runs per option × layout × model (`BUILD-REPORT.md` says if the sample was cut to fit, and to how many), chosen by a seeded order of the run keys alone, from the runs that had ended. Each
+- `results/traces/`: 413 whole runs, eight or nine per option × layout × model (ten were chosen per cell; `MISSING.md` says how the sample was cut to fit), chosen by a seeded order of the run keys alone, from the runs that had ended. Each
   archive holds the run's whole directory (every attempt): the agent's transcript, the code it ran, the instruments' records and the run record; the
   raw read-performance logs are replaced by a per-run summary. Model API signatures, platform file identifiers and host names are replaced by labels;
   `VERIFICATION.md` lists every rule. The run's scored row is the line with its key in `results/analysis/<snapshot>/out/pipeline/scored_rows.jsonl`.

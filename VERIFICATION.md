@@ -11,7 +11,7 @@ file of the anonymising build with its sha256 and the purpose of the entry it be
 ## Tables
 
 `make check` regenerates every analysis table of each result folder of the fixed snapshot from `results/analysis/<snapshot>/<folder>/pipeline/` and
-`.../<folder>/inputs/` and compares it byte for byte with `.../<folder>/tables/` (README, "Results only"). The analysis is deterministic: its bootstrap is seeded from the configuration.
+`.../<folder>/inputs/` and compares it byte for byte with `.../<folder>/tables/` (README, "Results only"). The analysis is deterministic: its bootstrap is seeded from the configuration. It was run on Linux x86-64 with the dependencies of `uv.lock`; no other platform was tried.
 Each `.../<folder>/inputs/inputs.json` names the source of every input in the snapshot and its sha256; the recount of the cohort is checked against
 the totals the snapshot recorded, and the K-augmentation against the counts the snapshot's K step logged. The tables' `manifest.json` is compared field by field: the fields that name the checkout and the Python
 and library versions are reported, not compared, and an input hash is compared only when the shipped input still has that hash.
@@ -28,9 +28,13 @@ The code was compared with the code that ran. `BUILD-REPORT.md`, "What ran, and 
 `icsa/`, lists the files that differ from it before anonymisation, and lists the files that the anonymisation rewrote: applying the same mapping to the
 file that ran gives exactly the file shipped here. The fixed snapshot records the code it ran (`results/analysis/<snapshot>/<folder>/SNAPSHOT.json`, `snapshot_code`).
 
+The snapshot tool and driver that ran the fixed snapshot are shipped as a record in `results/analysis/<snapshot>/code-that-ran/`, anonymised and scanned like
+every other file. The package's top-level `snapshot/` is the build's copy of that tool, from before its last changes; `make check` imports from it only the
+header stamp and the time parsing, and repeats the K-augmentation step itself (`reproduce/regenerate.py`, `kaug_runs`).
+
 ## Anonymity and secrets
 
-The package was built from the study's repository by an anonymising build, and the finished archive was scanned again.
+The package was built from the study's repository by an anonymising build, and the finished archive was scanned again. Files added to it afterwards passed the same scan at their package paths: the hand-written layer, and, mapped with the build's own label table (which refuses a value it has no label for and a changed number), each result folder's `inputs/`, `code-that-ran/`, `h3/`, `layout/`, `results/mplus/` and the six regenerated tables below. `MANIFEST.json` covers the build's files; `checksums.sha256` covers everything.
 
 **What the build rewrites** (contents and file names, the same real value to the same label in every file):
 
@@ -57,7 +61,7 @@ containers (zip, tar, gzip, PDF, PNG text chunks, notebooks):
 - secrets: token shapes (API keys, platform tokens, JWT, PEM blocks, `key = value` assignments, long high-entropy strings), and every file of the
   study's credential directories, by name and by the sha256 of its content.
 
-**Rules that relax the scan.** Each is counted by the scan, and each has test cases ("canaries") that must still fail the build. Token shapes and
+**Rules that relax the scan** (`BUILD-REPORT.md`, "What the checks let through", states them as the build applied them, with their counts). Each is counted by the scan, and each has test cases ("canaries") that must still fail the build. Token shapes and
 the exact-match secret checks are never relaxed, and code (everything outside `results/`, `reports/` and `MANIFEST.json`) gets only rules 6 to 8.
 
 In the trace sample (`results/traces/`):
@@ -68,7 +72,7 @@ In the trace sample (`results/traces/`):
 
 In the trace sample and in every file under `results/` and `reports/` and in `MANIFEST.json`:
 
-4. an identifier made only of words, numbers, short identifiers and hex identifiers (a container name, a quoted path, an argument list) is not taken
+4. an identifier made only of words, numbers, short identifiers, hex identifiers and model sizes (a container name, a quoted path, an argument list) is not taken
    for a key;
 5. a candidate with a `/` together with a `-` or `_`, and no `+`, cannot be base64 of either alphabet, so it is read as a path, not a key.
 

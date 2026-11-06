@@ -8,11 +8,11 @@ The final results of the study, organised by what the paper reports. Everything 
 
 **Scripts in `scripts/`** take the snapshot directory as their first argument:
 - `gen_final_tables.py`: the paper's tables;
-- `final_numbers.py`: every figure, with the per-run ones from the coded rows passed as its third argument;
+- `final_numbers.py`: every figure, the per-run ones from the coded rows in the snapshot's `h3/scored_rows_coded.jsonl`;
 - `hyp_table.py`: the contrasts by the registered decision rule;
 - `power.py`: power, which needs scipy.
 
-They print text and write nothing.
+They print text and write nothing. Run them from the package root, for example `python3 scripts/final_numbers.py results/analysis/final-20261106T0900Z`, and `power.py` with `uv run python`. On this package they print what they print on the snapshot before anonymisation, apart from the snapshot's own path and, at the end of `final_numbers.py`, the list of side files present, some of which this package does not ship.
 
 ## 1. Runs
 
@@ -159,7 +159,7 @@ These come from the per-run record measures in the snapshot (`final_numbers.py`)
 - **Time to first compute is unchanged:** 12.7 against 12.6 s in S1, and 6.9 against 6.7 s in S2.
 - **Against A's and D's cold scripted analyses** (3 instances, an earlier step, added after seeing the data): **in S1, A's and D's 276–280 s beat M+'s 409 s, so M+ never pays off; in S2 it pays off after 1–2 analyses.**
 
-Sources: the M+ run's summary and break-even files, shipped with the M+ records.
+Sources: `results/mplus/summary_table.json`, `results/mplus/breakeven.json` and the run's log `results/mplus/mplus_log.jsonl`; against A and D, `results/mplus/against-A-and-D/`.
 
 ## 10. Enforcement overhead
 
@@ -181,7 +181,7 @@ S1 wasn't measured.
 | S1 | 0.75 | 0.97 | 0.99 |
 | S2 | 0.80 | 0.89 | 0.80 |
 
-Reproduce with `power.py`, given the coded per-run rows. The conclusions rest on the intervals in section 3, which exclude 10 points.
+Reproduce with `uv run python scripts/power.py results/analysis/final-20261106T0900Z`, which reads the coded per-run rows. The conclusions rest on the intervals in section 3, which exclude 10 points.
 
 ## 12. Sensitivities
 
@@ -194,8 +194,4 @@ Under `final-20261106T0900Z-sens/` (`out-retries`, `out-lab504`, `out-050`), aga
 
 ## Per-run figures
 
-**The figures from the coded per-run rows** need the scored rows joined with the coders' labels, the snapshot's `scored_rows_coded.jsonl`:
-- IoU, edge-day counts, self-report, false alarms;
-- per-model counts, A+ means, power.
-
-**Where those rows are:** if the package ships them, pass their path to `final_numbers.py` and `power.py`. Otherwise these figures can't be regenerated from the package alone; every table-based figure above can.
+**The figures from the coded per-run rows** (IoU, edge-day counts, self-report, false alarms, per-model counts, A+ means, power) come from `h3/scored_rows_coded.jsonl` in the snapshot's folder: the scored rows joined with the coders' labels. `final_numbers.py` and `power.py` read it by default.
