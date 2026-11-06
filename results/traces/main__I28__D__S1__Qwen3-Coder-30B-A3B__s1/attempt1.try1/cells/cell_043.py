@@ -1,0 +1,10 @@
+# Final confirmation message
+print("TASK COMPLETION CONFIRMED")
+print("=" * 30)
+print("SUCCESS: Both output files created")
+print("  - output/mhw_mask.nc")
+print("  - output/report.json")
+print("")
+print("Marine heatwave detection for Baltic Sea region")
+print("completed according to specifications.")
+print("=" * 30)

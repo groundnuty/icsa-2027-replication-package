@@ -1,0 +1,14 @@
+# snapshot final=true t=2026-11-06T09:00:00Z
+
+Coder pairs (amendment 26(j)), over the 2413 primary-scope run(s) the analysis selects, not this table's own runs: no inspection input, so no run has a pair
+
+| T_seeds | outcome | layout | contrast | option_a | option_b | n_regions_dropped | n_regions | n_models | n_zero_dropped | effect | ci_lo | ci_hi | p_raw | p_holm | significant | smallest_effect | at_least_smallest | counts_for_guide | effect_ratio | ci_lo_ratio | ci_hi_ratio | null_share_a | null_share_b |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| seed 1 | omission | S1 | T-unpaginated-T | T-unpaginated | T | 25 | 0 | 0 | 0 | nan | nan | nan | nan | nan | nan | 0.1 | nan | nan | nan | nan | nan | nan | nan |
+| seed 1 | coverage_baseline | S1 | T-unpaginated-T | T-unpaginated | T | 6 | 19 | 1 | 19 | 0 | 0 | 0 | 1 | 1 | 0 | 0.1 | 0 | 0 | nan | nan | nan | 0.9251 | 0.8596 |
+| seed 1 | coverage_target | S1 | T-unpaginated-T | T-unpaginated | T | 6 | 19 | 1 | 19 | 0 | 0 | 0 | 1 | 1 | 0 | 0.1 | 0 | 0 | nan | nan | nan | 0.9251 | 0.8596 |
+| seed 1 | event_f1 | S1 | T-unpaginated-T | T-unpaginated | T | 0 | 25 | 7 | 15 | -0.0007206 | -0.02228 | 0.01769 | 0.9592 | 0.9592 | 0 | nan | nan | nan | nan | nan | nan | nan | nan |
+| seed 1 | tokens | S1 | T-unpaginated-T | T-unpaginated | T | 0 | 25 | 7 | 0 | -0.3424 | -0.5061 | -0.1704 | 0.001155 | 0.001155 | 1 | 1 | 0 | 0 | 0.7888 | 0.7041 | 0.8886 | nan | nan |
+| seed 1 | undisclosed | S1 | T-unpaginated-T | T-unpaginated | T | 25 | 0 | 0 | 0 | nan | nan | nan | nan | nan | nan | nan | nan | nan | nan | nan | nan | nan | nan |
+| seed 1 | end_to_end | S1 | T-unpaginated-T | T-unpaginated | T | 0 | 25 | 7 | 25 | 0 | 0 | 0 | 1 | 1 | 0 | nan | nan | nan | nan | nan | nan | nan | nan |
+| seed 1 | false_alarm | S1 | T-unpaginated-T | T-unpaginated | T | 0 | 8 | 6 | 5 | -0.02083 | -0.08333 | 0.04167 | 1 | 1 | 0 | nan | nan | nan | nan | nan | nan | nan | nan |

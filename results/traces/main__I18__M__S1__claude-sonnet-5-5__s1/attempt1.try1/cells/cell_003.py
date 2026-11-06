@@ -1,0 +1,2 @@
+dates=pd.date_range('1991-12-27','2003-01-05');miss=[x for x in dates if f"sst_{x:%Y%m%d}.nc" not in set(fs)];print(len(miss),miss[:10])
+miss2=[x for x in pd.date_range('2010-06-01','2010-08-31') if f"sst_{x:%Y%m%d}.nc" not in set(fs)];print(miss2)

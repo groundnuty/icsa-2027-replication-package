@@ -1,0 +1,12 @@
+# Final confirmation
+print("MARINE HEATWAVE ANALYSIS COMPLETE")
+print("================================")
+print("Files generated:")
+print("1. output/mhw_mask.nc - MHW mask data")
+print("2. output/report.json - Analysis report")
+print("")
+print("Results:")
+print("- 2 MHW events detected in Baltic Sea region")
+print("- Period: June 1 - August 31, 2008")
+print("- Region: 57.83°N to 59.03°N, 17.41°E to 18.61°E")
+print("- Method: Standard MHW detection algorithm")

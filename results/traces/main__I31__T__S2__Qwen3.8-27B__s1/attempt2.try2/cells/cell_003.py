@@ -1,0 +1,11 @@
+import fsspec
+import xarray as xr
+import numpy as np
+fs = fsspec.filesystem('onedata')
+f = fs.open('icsa2027_data_20261101T090944Z/s2z/sst_s2.nc', 'rb')
+ds = xarray.open_dataset(f, engine='h5netcdf')
+print(ds)
+print("---")
+for v in ds.variables:
+    var = ds[v]
+    print(v, var.dims, var.dtype, getattr(var, 'units', ''))

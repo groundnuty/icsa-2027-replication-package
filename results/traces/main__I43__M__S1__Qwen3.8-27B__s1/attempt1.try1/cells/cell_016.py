@@ -1,0 +1,5 @@
+s = open('/usr/local/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py').read()
+i = s.find('def _compute_virtual_index')
+print(s[i:i+1200])
+j = s.find('def _get_gamma(')
+print(s[j:j+900])

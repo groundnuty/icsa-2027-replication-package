@@ -1,0 +1,1 @@
+print(ds.analysed_sst.attrs, float(np.nanmin(T)))

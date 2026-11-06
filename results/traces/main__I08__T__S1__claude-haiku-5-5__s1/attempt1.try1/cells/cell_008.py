@@ -1,0 +1,74 @@
+import numpy as np, datetime, json, os
+import xarray as xr
+Z=np.load('/tmp/sst_region.npz')
+S=Z['sst'].astype(np.float64); dates=[datetime.date.fromisoformat(x) for x in Z['dates']]; lat=Z['lat']; lon=Z['lon']
+idx={d:i for i,d in enumerate(dates)}
+def doy(d):
+    # 1 Jan=1; 29 Feb=60 in all years; non-leap: 28 Feb=59, 1 Mar=61
+    if d.month==2 and d.day==29: return 60
+    base_=datetime.date(d.year,1,1)
+    x=(d-base_).days+1
+    if d.year%4==0 and (d.year%100!=0 or d.year%400==0) and d>=datetime.date(d.year,3,1): x-=1
+    return x
+# sanity mapping
+assert doy(datetime.date(2007,12,31))==365 and doy(datetime.date(2008,12,31))==366 and doy(datetime.date(2008,3,1))==61 and doy(datetime.date(2008,2,28))==59 and doy(datetime.date(2008,2,29))==60
+bstart=datetime.date(1992,1,1); bend=datetime.date(2002,12,31)
+# baseline dates
+bdates=[bstart+datetime.timedelta(i) for i in range((bend-bstart).days+1)]
+pool_dates={k:set() for k in range(1,367)}
+for b in bdates:
+    k=doy(b)
+    if k==60: continue
+    for off in range(-5,6):
+        pool_dates[k].add(b+datetime.timedelta(off))
+thr=np.full((367,)+S.shape[1:],np.nan); clim=np.full_like(thr,np.nan)
+for k in range(1,367):
+    if k==60: continue
+    ds_=sorted(pool_dates[k])
+    ii=[idx[x] for x in ds_]
+    P=S[ii]  # (n,60,60)
+    thr[k]=np.nanquantile(P,0.9,axis=0,method='hazen')
+    clim[k]=np.nanmean(P,axis=0)
+    if k in (1,366): print(k,len(ds_))
+thr[60]=(thr[59]+thr[61])/2; clim[60]=(clim[59]+clim[61])/2
+def smooth(a):
+    x=a[1:367]  # days 1..366 -> index 0..365
+    out=np.empty_like(x)
+    for d in range(366):
+        ii=[(d+o)%366 for o in range(-15,16)]
+        out[d]=np.mean(x[ii],axis=0)
+    r=np.full_like(a,np.nan); r[1:367]=out; return r
+thrS=smooth(thr); climS=smooth(clim)
+sea=np.all(np.isfinite(S[[idx[d] for d in dates if d>=datetime.date(2007,6,1)]]),axis=0)
+print('sea cells',sea.sum(),'of',sea.size)
+print('NaN thr for sea cells:', np.isnan(thrS[1:367][:,sea]).sum())
+tgt_dates=[d for d in dates if d>=datetime.date(2007,6,1)]
+ti=[idx[d] for d in tgt_dates]
+T=len(tgt_dates)
+hot=np.zeros((T,)+S.shape[1:],bool)
+for j,d in enumerate(tgt_dates):
+    th=thrS[doy(d)]
+    hot[j]=(S[idx[d]]>=th)&sea  # hot only sea cells
+mhw=np.zeros_like(hot)
+def runs(x):
+    r=[];s=None
+    for i,v in enumerate(list(x)+[False]):
+        if v and s is None: s=i
+        if not v and s is not None: r.append((s,i-1)); s=None
+    return r
+for i in range(sea.shape[0]):
+    for j in range(sea.shape[1]):
+        if not sea[i,j]: continue
+        rr=[r for r in runs(hot[:,i,j]) if r[1]-r[0]+1>=5]
+        merged=[]
+        for r in rr:
+            if merged and r[0]-merged[-1][1]-1<=2: merged[-1]=(merged[-1][0],r[1])
+            else: merged.append(r)
+        for a,b in merged: mhw[a:b+1,i,j]=True
+active=mhw.any(axis=(1,2))
+ev=[]; s=None
+for j,v in enumerate(list(active)+[False]):
+    if v and s is None: s=j
+    if not v and s is not None: ev.append((tgt_dates[s],tgt_dates[j-1])); s=None
+print('events',[(a.isoformat(),b.isoformat()) for a,b in ev])
+print('active days',active.sum(), 'mhw cell-days',mhw.sum())

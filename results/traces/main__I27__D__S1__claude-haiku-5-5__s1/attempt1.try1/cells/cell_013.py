@@ -1,0 +1,12 @@
+import pandas as pd, numpy as np, xarray as xr
+sub = xr.open_dataset('/work/sub.nc', engine='h5netcdf')
+A = sub.analysed_sst.values.astype(np.float64)  # (4120,60,60)
+T = pd.DatetimeIndex(np.load('/work/subtime.npy'))
+tgt = (T>=pd.Timestamp('2008-06-01'))&(T<=pd.Timestamp('2008-08-31'))
+print(tgt.sum())
+fin_t = np.isfinite(A[tgt]).all(axis=0)
+print('sea cells (finite all target days):', fin_t.sum())
+print('any finite in target:', np.isfinite(A[tgt]).any(axis=0).sum())
+base = (T>=pd.Timestamp('1992-01-01'))&(T<=pd.Timestamp('2002-12-31'))
+print('finite frac baseline sea cells:', np.isfinite(A[base][:,fin_t]).mean())
+print('target values range', np.nanmin(A[tgt]), np.nanmax(A[tgt]))

@@ -1,0 +1,1 @@
+print(hot.sum(), hot.any((1,2)).sum(), np.nanmean(x[:,sea]-thr[doy[ti]-1][:,sea]))

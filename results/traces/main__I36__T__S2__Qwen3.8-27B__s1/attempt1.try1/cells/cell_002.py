@@ -1,0 +1,22 @@
+import fsspec, numpy as np, xarray as xr
+fs = fsspec.filesystem('onedata')
+found = 'icsa2027_data_20261101T090944Z/s2z/sst_s2.nc'
+f = fs.open(found, 'rb')
+ds = xr.open_dataset(f, engine='h5netcdf')
+latv=ds.latitude.values.astype(np.float64); lonv=ds.longitude.values.astype(np.float64)
+print('lat dtype/spacing', latv[:3], np.diff(latv[:5]))
+print('lon dtype/spacing', lonv[:3], np.diff(lonv[:5]))
+mlat=(latv>=60.09)&(latv<=61.29); mlon=(lonv>=20.01)&(lonv<=21.21)
+print('nlat in', int(mlat.sum()), 'nlon in', int(mlon.sum()), 'cells', int(mlat.sum()*mlon.sum()))
+print('lat in region:', latv[mlat].tolist())
+print('lon in region:', lonv[mlon].tolist())
+sel = ds.analysed_sst.sel(time=slice('2003-06-01','2003-08-31'), latitude=slice(60.0,61.4), longitude=slice(19.9,21.4))
+print('target days', sel.sizes['time'], sel.time.values[:2], sel.time.values[-2:])
+# finiteness in region over target
+sub = sel.isel(latitude=mlat, longitude=mlon)
+print('region target shape', sub.analysed_sst.shape)
+fin = np.isfinite(sub.analysed_sst.values.astype(np.float64))
+print('all-finite cells (sea candidates):', int(fin.all(axis=0).sum()), 'of', int(mlat.sum()*mlon.sum()))
+print('sst min/max in region target:', float(np.nanmin(sub.analysed_sst.values)), float(np.nanmax(sub.analysed_sst.values)))
+ds.close(); f.close()
+print('OK')

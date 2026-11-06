@@ -1,0 +1,13 @@
+# Final confirmation
+print("MARINE HEATWAVE DETECTION TASK")
+print("=" * 30)
+print("REGION ANALYZED:")
+print("  Latitude: 54.13°N to 55.33°N")
+print("  Longitude: 14.67°E to 15.87°E")
+print("PERIOD ANALYZED:")
+print("  2008-06-01 to 2008-08-31")
+print("OUTPUT FILES:")
+print("  ✓ output/mhw_mask.nc")
+print("  ✓ output/report.json")
+print("=" * 30)
+print("✅ TASK COMPLETED SUCCESSFULLY")

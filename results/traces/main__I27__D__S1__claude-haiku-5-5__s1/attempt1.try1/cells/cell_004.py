@@ -1,0 +1,5 @@
+g = fs.glob('icsa2027_data_20261101T090944Z/s1z/sst_*.nc')
+print(len(g), g[-1])
+print(fs.ls('icsa2027_data_20261101T090944Z', detail=False))
+g2=fs.glob('icsa2027_data_20261101T090944Z/**')
+print(len(g2), g2[:5], g2[-5:])

@@ -2,13 +2,13 @@
 
 The instrument audit of the registered design (a stratified sample read blind, with error rates per instrument) was not run as designed, and no file in this artifact is its result. Its role is filled by the blind inspection: known-answer scores, pair agreement and the numeric replay, shipped as coding data under `results/coding/` and labelled as such. The files under `results/validation/9-instruments` are the validation of the instruments against known answers, not that audit.
 
+# Cut to fit the size limit
+
+The trace sample was cut from the END of its seeded order to keep the tree under 2048 MiB: 413 of the 490 chosen runs stayed (every option x layout x model cell keeps its first 8 to 9 runs). Nothing else was cut.
+
 # Entries with no files in the source commit
 
-- `results/traces`: All run traces (by manifest with sha256)
 - `results/runs`: Run records and scored rows
-- `results/analysis`: Analysis outputs: tables, figures and manifest
-- `results/coding`: Coding data: the blind inspection (known-answer scores, pair agreement, the numeric replay) and the second coder's packets, from the final snapshot
-- `results/reference-validation`: Reference validation results
 - `results/pilot`: Pilot runs and the power re-estimate
 - `notebooks`: Analysis notebooks
 

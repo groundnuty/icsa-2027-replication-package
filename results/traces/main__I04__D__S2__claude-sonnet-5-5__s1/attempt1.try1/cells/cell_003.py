@@ -1,0 +1,1 @@
+print(ds.time.values[:3])

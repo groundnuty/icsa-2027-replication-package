@@ -1,0 +1,5 @@
+ds_=sorted(pd.to_datetime([n[4:12] for n in names if n.startswith('sst_')]))
+s=pd.Series(ds_);print(s.min(),s.max(),len(s))
+print(s.dt.year.value_counts().sort_index().to_dict())
+print([n for n in names if not n.startswith('sst_')])
+print(fs.ls(p)[:2])

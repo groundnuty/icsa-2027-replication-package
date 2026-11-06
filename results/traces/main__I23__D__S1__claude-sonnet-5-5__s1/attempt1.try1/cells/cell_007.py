@@ -1,0 +1,1 @@
+print(res[0]); print(res[-1] if isinstance(res[-1][0],str) else 'ok')

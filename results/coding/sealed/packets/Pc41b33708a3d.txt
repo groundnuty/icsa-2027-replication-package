@@ -1,0 +1,1336 @@
+# Run record
+
+## Task prompt
+
+You are a research assistant with a Python sandbox.
+
+**Task.** Detect marine heatwaves (MHWs) in one region of the Baltic Sea over one period, using the dataset `cmems_obs-sst_bal_phy-temp_my_l4_P1D-m`, the Copernicus Marine Baltic Sea sea-surface temperature product (reprocessed, level 4, daily). Your dataset tools describe its contents.
+
+- Region: grid cells with latitude from 57.85 to 59.05 °N and longitude from 21.01 to 22.21 °E, bounds inclusive.
+- Target period: 2013-06-01 to 2013-08-31, inclusive.
+
+**Method.** Follow it exactly; it is the method of a published Baltic MHW catalogue.
+1. *Sea cells* are the region's grid cells whose SST is finite on every day of the target period.
+2. *Threshold and climatology*, per sea cell and day of year, come from the baseline years 1992–2002.
+   - Map every date to a day of year from 1 to 366 by month and day: 1 January = 1, 28 February = 59, 29 February = 60, 1 March = 61, …, 31 December = 366. Non-leap years have no day 60.
+   - For each day of year d other than 60, the pool is every SST value whose date lies within ±5 calendar days of a baseline date (1992-01-01 to 2002-12-31) whose day of year is d. Windows near the ends of the baseline reach up to 5 days beyond it (1991-12-27 to 1991-12-31 and 2003-01-01 to 2003-01-05); include those days. 29 February values belong to the windows of their calendar neighbours. Day 60 gets no pool of its own.
+   - The threshold is the 90th percentile of the pool, computed as MATLAB's `quantile` does by default, which is numpy's `method="hazen"` (Hyndman–Fan type 5), ignoring NaN.
+   - The climatology is the mean of the pool, ignoring NaN.
+   - In both the threshold and the climatology, set day 60 to the mean of days 59 and 61.
+   - Then smooth each of them, as a 366-element array, with an unweighted centred 31-day moving mean that wraps around the year (day d averages days d−15 … d+15, counted modulo 366).
+3. *Per-cell MHWs*, over the target period only. Restrict SST to 2013-06-01–2013-08-31 before finding hot runs and joining gaps; do not use days outside it.
+   - a day is hot in a cell if its SST, in kelvin as stored, is greater than or equal to that cell's threshold for that day of year;
+   - a per-cell MHW is a run of at least 5 consecutive hot days;
+   - per-cell MHWs separated by 1 or 2 non-hot days are joined into one, and the gap days belong to it.
+4. *Regional events:*
+   - a day is active if at least one sea cell of the region is inside a per-cell MHW on that day;
+   - a regional MHW event is a maximal run of consecutive active days, so it ends when no cell of the region is in an MHW for at least one day.
+
+Compute thresholds, climatology, smoothing and comparisons in double precision (float64).
+
+**Tools.** You have tools that describe the dataset (discovery and metadata), and a Python tool that runs your code in the sandbox and returns its printed output.
+- Printed output is truncated to 8000 characters per call, so do not print large arrays.
+- You may use at most 230 rounds of tool calls, 12190000 tokens and 490 minutes in total.
+
+**Data access.** The dataset is stored on a Onedata research-data platform, in the directory `icsa2027_data_20261101T090944Z/s1z`. In your sandbox, `fs = fsspec.filesystem('onedata')` gives a preconfigured, authenticated fsspec filesystem for the platform. `fs.get(remote_path, local_path)` downloads a whole file to local disk under `/work`; files cannot be read remotely in place, so open the local copy with xarray (for example `xarray.open_dataset(path, engine="h5netcdf")`).
+
+**Results.** Before you finish, your code must write two files:
+- `output/mhw_mask.nc`: NetCDF with one variable `mhw` of type uint8 and dimensions (`time`, `lat`, `lon`).
+  - It covers the region's grid cells and the target days you analysed, with the dataset's coordinate values. If you analysed no target days, write it with an empty `time` dimension.
+  - `mhw` is 1 where the cell is inside a per-cell MHW on that day, and 0 otherwise (land cells are 0).
+- `output/report.json`: an object with exactly these fields:
+  - `region`: `{"lat_min": number, "lat_max": number, "lon_min": number, "lon_max": number}`, the region you analysed;
+  - `baseline_analysed`: `{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`, the first and last baseline day (inclusive) your threshold and climatology used, or `null` if none;
+  - `target_analysed`: `{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`, the first and last target day (inclusive) you analysed, or `null` if none;
+  - `events`: a list of `{"onset": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`, one per regional event, in time order, where `end` is the event's last active day; empty if there are none;
+  - `complete`: `true` if you consider your analysis complete, otherwise `false`;
+  - `caveats`: a string, which may be empty.
+
+When both files are written, reply with a short final message and no tool call. That ends the task.
+
+## Code cells, in the order they ran
+
+=== Cell C1 (exit code 0) ===
+--- code ---
+L1  | import os, sys
+L2  | print("cwd:", os.getcwd())
+L3  | print(sys.version.split()[0])
+L4  | import numpy as np, xarray as xr
+L5  | print("numpy", np.__version__, "| xarray", xr.__version__)
+L6  | for m in ("h5netcdf","netCDF4","scipy"):
+L7  |     try:
+L8  |         mod=__import__(m); print(m, getattr(mod,"__version__","?"))
+L9  |     except Exception as e:
+L10 |         print(m, "MISSING", repr(e)[:120])
+L11 | import fsspec
+L12 | fs = fsspec.filesystem('onedata')
+L13 | base='icsa2027_data_20261101T090944Z/s1z'
+L14 | entries=None
+L15 | for p in (base, '/'+base):
+L16 |     try:
+L17 |         entries = fs.ls(p, detail=True)
+L18 |         print("LS OK:", p, "n =", len(entries))
+L19 |         base=p
+L20 |         break
+L21 |     except Exception as e:
+L22 |         print("LS fail:", p, repr(e)[:200])
+L23 | if entries is not None:
+L24 |     tot=0
+L25 |     for e in entries[:50]:
+L26 |         sz=e.get('size') or 0; tot+=sz
+L27 |         print(e.get('type'), sz, e.get('name'))
+L28 |     print("shown total size:", tot)
+--- stdout ---
+cwd: /work
+3.12.13
+numpy 2.5.4 | xarray 2026.9.0
+h5netcdf 1.8.2
+netCDF4 ENDPOINT.post1
+scipy 1.18.1
+LS OK: icsa2027_data_20261101T090944Z/s1z n = 1000
+file 190003 icsa2027_data_20261101T090944Z/s1z/sst_19820101.nc
+file 178998 icsa2027_data_20261101T090944Z/s1z/sst_19820102.nc
+file 173658 icsa2027_data_20261101T090944Z/s1z/sst_19820103.nc
+file 168293 icsa2027_data_20261101T090944Z/s1z/sst_19820104.nc
+file 169523 icsa2027_data_20261101T090944Z/s1z/sst_19820105.nc
+file 173180 icsa2027_data_20261101T090944Z/s1z/sst_19820106.nc
+file 198102 icsa2027_data_20261101T090944Z/s1z/sst_19820107.nc
+file 212147 icsa2027_data_20261101T090944Z/s1z/sst_19820108.nc
+file 211015 icsa2027_data_20261101T090944Z/s1z/sst_19820109.nc
+file 205636 icsa2027_data_20261101T090944Z/s1z/sst_19820110.nc
+file 209475 icsa2027_data_20261101T090944Z/s1z/sst_19820111.nc
+file 215803 icsa2027_data_20261101T090944Z/s1z/sst_19820112.nc
+file 212054 icsa2027_data_20261101T090944Z/s1z/sst_19820113.nc
+file 200112 icsa2027_data_2026
+[... 1327 characters omitted ...]
+T090944Z/s1z/sst_19820204.nc
+file 177937 icsa2027_data_20261101T090944Z/s1z/sst_19820205.nc
+file 158008 icsa2027_data_20261101T090944Z/s1z/sst_19820206.nc
+file 154966 icsa2027_data_20261101T090944Z/s1z/sst_19820207.nc
+file 152843 icsa2027_data_20261101T090944Z/s1z/sst_19820208.nc
+file 142746 icsa2027_data_20261101T090944Z/s1z/sst_19820209.nc
+file 150521 icsa2027_data_20261101T090944Z/s1z/sst_19820210.nc
+file 165880 icsa2027_data_20261101T090944Z/s1z/sst_19820211.nc
+file 191710 icsa2027_data_20261101T090944Z/s1z/sst_19820212.nc
+file 189047 icsa2027_data_20261101T090944Z/s1z/sst_19820213.nc
+file 173130 icsa2027_data_20261101T090944Z/s1z/sst_19820214.nc
+file 160335 icsa2027_data_20261101T090944Z/s1z/sst_19820215.nc
+file 160428 icsa2027_data_20261101T090944Z/s1z/sst_19820216.nc
+file 177264 icsa2027_data_20261101T090944Z/s1z/sst_19820217.nc
+file 178028 icsa2027_data_20261101T090944Z/s1z/sst_19820218.nc
+file 192406 icsa2027_data_20261101T090944Z/s1z/sst_19820219.nc
+shown total size: 9295994
+--- stderr ---
+(empty)
+
+=== Cell C2 (exit code 0) ===
+--- code ---
+L1  | import fsspec, os
+L2  | fs = fsspec.filesystem('onedata')
+L3  | base='icsa2027_data_20261101T090944Z/s1z'
+L4  | # download one sample file to inspect structure
+L5  | fs.get(base+'/sst_19820101.nc', '/work/sample.nc')
+L6  | print("downloaded:", os.path.getsize('/work/sample.nc'))
+L7  | import xarray as xr
+L8  | ds = xr.open_dataset('/work/sample.nc', engine='h5netcdf')
+L9  | print(ds)
+L10 | print("---- attrs ----")
+L11 | print(ds.attrs)
+L12 | for v in ds.variables:
+L13 |     print(v, ds[v].dtype, ds[v].shape, dict(ds[v].attrs))
+--- stdout ---
+downloaded: 190003
+<xarray.Dataset> Size: 3MB
+Dimensions:       (time: 1, latitude: 626, longitude: 1051)
+Coordinates:
+  * time          (time) datetime64[ns] 8B 1982-01-01
+  * latitude      (latitude) float32 3kB 53.5 53.52 53.54 ... 65.96 65.98 66.0
+  * longitude     (longitude) float32 4kB 9.0 9.02 9.04 ... 29.96 29.98 30.0
+Data variables:
+    analysed_sst  (time, latitude, longitude) float32 3MB ...
+Attributes:
+    Conventions:                        CF-1.4
+    title:                              Baltic Sea/North Sea SST analysis, da...
+    institution:                        Danish Meteorological Institute, DMI
+    source:                             Copernicus Marine SST_BAL_SST_L4_REP_...
+    references:                         doi:10.48670/moi-00156
+    comment:                            analysed_sst decoded from int16 scale...
+    license:                            Generated using E.U. Copernicus Marin...
+    acknowledgment:                     Generated using E.U. Copernicu
+[... 673 characters omitted ...]
+; land and values outside the source valid range are NaN.', 'license': 'Generated using E.U. Copernicus Marine Service Information; ENDPOINT/10.48670/moi-00156', 'acknowledgment': 'Generated using E.U. Copernicus Marine Service Information; ENDPOINT/10.48670/moi-00156', 'copernicus_marine_product_id': 'SST_BAL_SST_L4_REP_OBSERVATIONS_010_016', 'copernicus_marine_dataset_id': 'cmems_obs-sst_bal_phy-temp_my_l4_P1D-m', 'copernicus_marine_dataset_version': '202506', 'copernicus_marine_download_date': '2026-10-31'}
+analysed_sst float32 (1, 626, 1051) {'long_name': 'analysed sea surface temperature', 'standard_name': 'sea_surface_foundation_temperature', 'units': 'kelvin'}
+time datetime64[ns] (1,) {'long_name': 'Time', 'standard_name': 'time', 'axis': 'T'}
+latitude float32 (626,) {'long_name': 'latitude', 'units': 'degrees_north', 'standard_name': 'latitude', 'axis': 'Y'}
+longitude float32 (1051,) {'long_name': 'longitude', 'units': 'degrees_east', 'standard_name': 'longitude', 'axis': 'X'}
+--- stderr ---
+(empty)
+
+=== Cell C3 (exit code 1) ===
+--- code ---
+L1  | import numpy as np, xarray as xr, fsspec, os, time, shutil
+L2  | 
+L3  | fs = fsspec.filesystem('onedata')
+L4  | base='icsa2027_data_20261101T090944Z/s1z'
+L5  | 
+L6  | # --- grid and region selection ---
+L7  | ds0 = xr.open_dataset('/work/sample.nc', engine='h5netcdf')
+L8  | lat = ds0['latitude'].values.astype(np.float64)
+L9  | lon = ds0['longitude'].values.astype(np.float64)
+L10 | print("lat step uniq:", np.unique(np.round(np.diff(lat),6))[:5], "lon step uniq:", np.unique(np.round(np.diff(lon),6))[:5])
+L11 | latmin, latmax, lonmin, lonmax = 57.85, 59.05, 21.01, 22.21
+L12 | lat_i = np.where((lat>=latmin)&(lat<=latmax))[0]
+L13 | lon_i = np.where((lon>=lonmin)&(lon<=lonmax))[0]
+L14 | print("lat idx:", lat_i[0], "..", lat_i[-1], "n=",len(lat_i), "vals", lat[lat_i[0]], lat[lat_i[-1]])
+L15 | print("lon idx:", lon_i[0], "..", lon_i[-1], "n=",len(lon_i), "vals", lon[lon_i[0]], lon[lon_i[-1]])
+L16 | print("contiguous lat:", np.all(np.diff(lat_i)==1), "lon:", np.all(np.diff(lon_i)==1))
+L17 | 
+L18 | # --- grid consistency across years + time coord check ---
+L19 | t0=time.time()
+L20 | for fn in ['sst_19920601.nc','sst_20020228.nc','sst_20130815.nc']:
+L21 |     p='/work/chk.nc'
+L22 |     fs.get(base+'/'+fn, p)
+L23 |     d = xr.open_dataset(p, engine='h5netcdf')
+L24 |     same = (np.array_equal(d['latitude'].values, ds0['latitude'].values) and
+L25 |             np.array_equal(d['longitude'].values, ds0['longitude'].values))
+L26 |     v = d['analysed_sst']
+L27 |     sub = v[0, lat_i[0]:lat_i[-1]+1, lon_i[0]:lon_i[-1]+1]
+L28 |     print(fn, d['time'].values, "grid identical:", same, "sub shape:", sub.shape,
+L29 |           "finite frac: %.3f" % np.isfinite(sub.values).mean())
+L30 |     d.close()
+L31 | print("3 files took %.2f s (download+open)" % (time.time()-t0))
+L32 | 
+L33 | # --- disk space ---
+L34 | st = os.statvfs('/work')
+L35 | print("disk free GB: %.1f" % (st.f_bavail*st.f_frsize/1e9))
+L36 | 
+L37 | # --- batch get test: 30 files via list + via glob ---
+L38 | os.makedirs('/work/dltest', exist_ok=True)
+L39 | fns = [f'sst_199202{d:02d}.nc' for d in range(1,11)]
+L40 | t0=time.time()
+L41 | fs.get([base+'/'+f for f in fns], '/work/dltest/')
+L42 | print("list-get 10 files: %.2f s" % (time.time()-t0), sorted(os.listdir('/work/dltest'))[:12])
+L43 | t0=time.time()
+L44 | fs.get(base+'/sst_199203*.nc', '/work/dltest/')
+L45 | n=len([f for f in os.listdir('/work/dltest') if f.startswith('sst_199203')])
+L46 | print("glob-get March1992: %.2f s, got %d files" % (time.time()-t0, n))
+--- stdout ---
+lat step uniq: [0.019997 0.02     0.020004] lon step uniq: [0.019999 0.02    ]
+lat idx: 218 .. 277 n= 60 vals 57.86000061035156 59.040000915527344
+lon idx: 601 .. 660 n= 60 vals 21.01999855041504 22.19999885559082
+contiguous lat: True lon: True
+sst_19920601.nc ['1992-06-01T00:00:00.000000000'] grid identical: True sub shape: (60, 60) finite frac: 0.917
+sst_20020228.nc ['2002-02-28T00:00:00.000000000'] grid identical: True sub shape: (60, 60) finite frac: 0.917
+sst_20130815.nc ['2013-08-15T00:00:00.000000000'] grid identical: True sub shape: (60, 60) finite frac: 0.917
+3 files took DURATION (download+open)
+disk free GB: 4.7
+list-get 10 files: DURATION ['sst_19920201.nc', 'sst_19920202.nc', 'sst_19920203.nc', 'sst_19920204.nc', 'sst_19920205.nc', 'sst_19920206.nc', 'sst_19920207.nc', 'sst_19920208.nc', 'sst_19920209.nc', 'sst_19920210.nc']
+--- stderr ---
+Traceback (most recent call last):
+  File "<stdin>", line 44, in <module>
+  File "/usr/local/lib/python3.12/site-packages/fsspec/spec.py", line 1040, in get
+    rpaths = self.expand_path(
+             ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/fsspec/spec.py", line 1254, in expand_path
+    out = self.expand_path([path], recursive, maxdepth, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/fsspec/spec.py", line 1289, in expand_path
+    raise FileNotFoundError(path)
+FileNotFoundError: ['icsa2027_data_20261101T090944Z/s1z/sst_199203*.nc']
+
+=== Cell C4 (exit code 0) ===
+--- code ---
+L1  | import fsspec, os, time, numpy as np, xarray as xr, datetime as dt, shutil
+L2  | 
+L3  | fs = fsspec.filesystem('onedata')
+L4  | base='icsa2027_data_20261101T090944Z/s1z'
+L5  | 
+L6  | # --- probe existence of critical dates ---
+L7  | probe = ['1991-12-27','1991-12-31','1992-01-01','1992-02-29','1996-02-29','2000-02-29',
+L8  |          '2002-12-31','2003-01-01','2003-01-05','2013-06-01','2013-08-31','2013-09-01']
+L9  | t0=time.time()
+L10 | for d in probe:
+L11 |     fn = 'sst_%s.nc' % d.replace('-','')
+L12 |     try: ok = fs.exists(base+'/'+fn)
+L13 |     except Exception as e: ok = 'ERR:'+repr(e)[:60]
+L14 |     print(d, ok)
+L15 | print("probe time %.2f s" % (time.time()-t0))
+L16 | 
+L17 | # --- download + extract target period ---
+L18 | lat0,lat1,lon0,lon1 = 218,278,601,661
+L19 | tgt = [dt.date(2013,6,1)+dt.timedelta(days=i) for i in range(92)]
+L20 | fns = ['sst_%s.nc'%d.strftime('%Y%m%d') for d in tgt]
+L21 | shutil.rmtree('/work/tgt', ignore_errors=True); os.makedirs('/work/tgt', exist_ok=True)
+L22 | t0=time.time()
+L23 | fs.get([base+'/'+f for f in fns], '/work/tgt/')
+L24 | print("batch get 92 files: %.1f s, on disk: %d" % (time.time()-t0, len(os.listdir('/work/tgt'))))
+L25 | 
+L26 | ref_ds = xr.open_dataset('/work/sample.nc', engine='h5netcdf')
+L27 | ref_lat, ref_lon = ref_ds['latitude'].values, ref_ds['longitude'].values
+L28 | sst_t = np.full((92,60,60), np.nan, dtype=np.float64)
+L29 | missing, badgrid, badtime = [], [], []
+L30 | t0=time.time()
+L31 | for i,(d,fn) in enumerate(zip(tgt,fns)):
+L32 |     p='/work/tgt/'+fn
+L33 |     if not os.path.exists(p):
+L34 |         missing.append(str(d)); continue
+L35 |     with xr.open_dataset(p, engine='h5netcdf') as ds:
+L36 |         tv = ds['time'].values[0]
+L37 |         if tv.astype('datetime64[D]') != np.datetime64(d): badtime.append(str(d))
+L38 |         if not (np.array_equal(ds['latitude'].values, ref_lat) and np.array_equal(ds['longitude'].values, ref_lon)):
+L39 |             badgrid.append(str(d))
+L40 |         sst_t[i] = ds['analysed_sst'][0, lat0:lat1, lon0:lon1].values.astype(np.float64)
+L41 | print("extract: %.1f s | missing=%s badgrid=%s badtime=%s" % (time.time()-t0, missing, badgrid, badtime))
+L42 | fin_frac_cell = np.isfinite(sst_t).all(axis=0)
+L43 | print("target finite-all cells (sea cells):", int(fin_frac_cell.sum()), "of 3600")
+L44 | print("per-day finite counts min/max:", int(np.isfinite(sst_t).sum(axis=(1,2)).min()), int(np.isfinite(sst_t).sum(axis=(1,2)).max()))
+L45 | np.save('/work/target_sst.npy', sst_t)
+L46 | np.save('/work/target_dates.npy', np.array([d.isoformat() for d in tgt]))
+L47 | shutil.rmtree('/work/tgt')
+L48 | print("saved target array; disk free GB: %.1f" % (os.statvfs('/work').f_bavail*os.statvfs('/work').f_frsize/1e9))
+--- stdout ---
+1991-12-27 True
+1991-12-31 True
+1992-01-01 True
+1992-02-29 True
+1996-02-29 True
+2000-02-29 True
+2002-12-31 True
+2003-01-01 True
+2003-01-05 True
+2013-06-01 True
+2013-08-31 True
+2013-09-01 True
+probe time DURATION
+batch get 92 files: DURATION, on disk: 92
+extract: DURATION | missing=[] badgrid=[] badtime=[]
+target finite-all cells (sea cells): 3301 of 3600
+per-day finite counts min/max: 3301 3301
+saved target array; disk free GB: 4.7
+--- stderr ---
+(empty)
+
+=== Cell C5 (exit code 0) ===
+--- code ---
+L1  | import fsspec, os, time, datetime as dt, numpy as np
+L2  | 
+L3  | fs = fsspec.filesystem('onedata')
+L4  | base='icsa2027_data_20261101T090944Z/s1z'
+L5  | 
+L6  | # all dates in extended range
+L7  | d0 = dt.date(1991,12,27); d1 = dt.date(2003,1,5)
+L8  | nd = (d1-d0).days + 1
+L9  | ext_dates = [d0+dt.timedelta(days=i) for i in range(nd)]
+L10 | print("ext range:", ext_dates[0], "->", ext_dates[-1], "n =", nd)
+L11 | fns = ['sst_%s.nc'%d.strftime('%Y%m%d') for d in ext_dates]
+L12 | t0=time.time()
+L13 | exist = [fs.exists(base+'/'+f) for f in fns]
+L14 | print("exists check: %.1f s; missing: %d" % (time.time()-t0, sum(1 for e in exist if not e)))
+L15 | miss = [f for f,e in zip(fns,exist) if not e]
+L16 | if miss: print("missing examples:", miss[:10])
+L17 | 
+L18 | # h5py speed test
+L19 | import h5py
+L20 | t0=time.time()
+L21 | with h5py.File('/work/sample.nc','r') as f:
+L22 |     print("h5py keys:", list(f.keys()))
+L23 |     dset = f['analysed_sst']
+L24 |     print("chunks:", dset.chunks, "compression:", dset.compression, "dtype:", dset.dtype)
+L25 |     blk = dset[0, 218:278, 601:661]
+L26 | print("h5py single-file open+slice: %.3f s" % (time.time()-t0))
+L27 | print("blk sample:", blk[30,30], blk.dtype, "finite:", np.isfinite(blk).mean())
+L28 | 
+L29 | # xarray speed for comparison
+L30 | import xarray as xr
+L31 | t0=time.time()
+L32 | for _ in range(5):
+L33 |     with xr.open_dataset('/work/sample.nc', engine='h5netcdf') as ds:
+L34 |         v = ds['analysed_sst'][0, 218:278, 601:661].values.astype(np.float64)
+L35 | print("xarray avg open+slice: %.3f s" % ((time.time()-t0)/5))
+--- stdout ---
+ext range: 1991-12-27 -> 2003-01-05 n = 4028
+exists check: DURATION; missing: 0
+h5py keys: ['analysed_sst', 'time', 'latitude', 'longitude']
+chunks: (1, 626, 1051) compression: gzip dtype: float32
+h5py single-file open+slice: DURATION
+blk sample: 275.81 float32 finite: 0.9169444444444445
+xarray avg open+slice: DURATION
+--- stderr ---
+(empty)
+
+=== Cell C6 (exit code 1) ===
+--- code ---
+L1  | import fsspec, os, time, datetime as dt, numpy as np, h5py, shutil
+L2  | 
+L3  | fs = fsspec.filesystem('onedata')
+L4  | base='icsa2027_data_20261101T090944Z/s1z'
+L5  | lat0,lat1,lon0,lon1 = 218,278,601,661
+L6  | 
+L7  | d0 = dt.date(1991,12,27); d1 = dt.date(2003,1,5)
+L8  | ext_dates = [d0+dt.timedelta(days=i) for i in range((d1-d0).days+1)]
+L9  | fns = ['sst_%s.nc'%d.strftime('%Y%m%d') for d in ext_dates]
+L10 | n = len(fns)
+L11 | base_sst = np.full((n,60,60), np.nan, dtype=np.float64)
+L12 | 
+L13 | work='/work/b'; shutil.rmtree(work, ignore_errors=True); os.makedirs(work, exist_ok=True)
+L14 | CH=250
+L15 | t00=time.time()
+L16 | missing=[]
+L17 | # validate h5py path on first file
+L18 | fs.get([base+'/'+fns[0]], work)
+L19 | with h5py.File(work+'/'+fns[0],'r') as f:
+L20 |     a = f['analysed_sst'][0, lat0:lat1, lon0:lon1].astype(np.float64)
+L21 | with xr_open = None: pass
+--- stdout ---
+(empty)
+--- stderr ---
+  File "<stdin>", line 21
+    with xr_open = None: pass
+                 ^
+SyntaxError: invalid syntax
+
+=== Cell C7 (exit code 0) ===
+--- code ---
+L1  | import fsspec, os, time, datetime as dt, numpy as np, h5py, shutil
+L2  | 
+L3  | fs = fsspec.filesystem('onedata')
+L4  | base='icsa2027_data_20261101T090944Z/s1z'
+L5  | lat0,lat1,lon0,lon1 = 218,278,601,661
+L6  | 
+L7  | d0 = dt.date(1991,12,27); d1 = dt.date(2003,1,5)
+L8  | ext_dates = [d0+dt.timedelta(days=i) for i in range((d1-d0).days+1)]
+L9  | fns = ['sst_%s.nc'%d.strftime('%Y%m%d') for d in ext_dates]
+L10 | n = len(fns)
+L11 | base_sst = np.full((n,60,60), np.nan, dtype=np.float64)
+L12 | 
+L13 | work='/work/b'; shutil.rmtree(work, ignore_errors=True); os.makedirs(work, exist_ok=True)
+L14 | CH=250
+L15 | t00=time.time()
+L16 | missing=[]
+L17 | for c0 in range(0, n, CH):
+L18 |     c1 = min(c0+CH, n)
+L19 |     chunk = fns[c0:c1]
+L20 |     fs.get([base+'/'+f for f in chunk], work)
+L21 |     for j,fn in enumerate(chunk):
+L22 |         p = work+'/'+fn
+L23 |         if not os.path.exists(p):
+L24 |             missing.append(fn); continue
+L25 |         try:
+L26 |             with h5py.File(p,'r') as f:
+L27 |                 base_sst[c0+j] = f['analysed_sst'][0, lat0:lat1, lon0:lon1].astype(np.float64)
+L28 |         except Exception as e:
+L29 |             missing.append(fn+'::'+repr(e)[:80])
+L30 |     if (c0//CH) % 4 == 0:
+L31 |         print("chunk %d-%d done, %.1f s elapsed, disk free %.1f GB" % (c0, c1-1, time.time()-t00, os.statvfs('/work').f_bavail*os.statvfs('/work').f_frsize/1e9))
+L32 | print("ALL chunks done in %.1f s | missing=%d" % (time.time()-t00, len(missing)))
+L33 | if missing: print(missing[:10])
+L34 | # grid check on first and last file
+L35 | for fn in (fns[0], fns[-1]):
+L36 |     with h5py.File(work+'/'+fn,'r') as f:
+L37 |         la=f['latitude'][lat0:lat1]; lo=f['longitude'][lon0:lon1]
+L38 |     print(fn, "lat", la[0], la[-1], "lon", lo[0], lo[-1])
+L39 | print("finite frac overall: %.4f" % np.isfinite(base_sst).mean())
+L40 | np.save('/work/base_sst.npy', base_sst)
+L41 | np.save('/work/base_dates.npy', np.array([d.isoformat() for d in ext_dates]))
+L42 | shutil.rmtree(work)
+L43 | print("saved. disk free GB: %.1f" % (os.statvfs('/work').f_bavail*os.statvfs('/work').f_frsize/1e9))
+--- stdout ---
+chunk 0-249 done, DURATION elapsed, disk free 4.6 GB
+chunk 1000-1249 done, DURATION elapsed, disk free 4.3 GB
+chunk 2000-2249 done, DURATION elapsed, disk free 4.0 GB
+chunk 3000-3249 done, DURATION elapsed, disk free 3.7 GB
+chunk 4000-4027 done, DURATION elapsed, disk free 3.5 GB
+ALL chunks done in DURATION | missing=0
+sst_19911227.nc lat 57.86 59.04 lon 21.019999 22.199999
+sst_20030105.nc lat 57.86 59.04 lon 21.019999 22.199999
+finite frac overall: 0.9169
+saved. disk free GB: 4.5
+--- stderr ---
+(empty)
+
+=== Cell C8 (exit code 0) ===
+--- code ---
+L1  | import numpy as np, datetime as dt, json, os, warnings
+L2  | from collections import defaultdict
+L3  | 
+L4  | base_sst = np.load('/work/base_sst.npy')                      # (4028,60,60) float64
+L5  | ext_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/base_dates.npy')]
+L6  | sst_t = np.load('/work/target_sst.npy')                       # (92,60,60) float64
+L7  | tgt_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L8  | T, H, W = sst_t.shape
+L9  | 
+L10 | MON_CUM = np.array([0,31,60,91,121,152,182,213,244,274,305,335])
+L11 | mdoy = lambda d: int(MON_CUM[d.month-1] + d.day)              # leap-style DOY by (month,day)
+L12 | 
+L13 | doy_ext = np.array([mdoy(d) for d in ext_dates])
+L14 | n_ext = len(ext_dates)
+L15 | bmask = np.array([dt.date(1992,1,1) <= d <= dt.date(2002,12,31) for d in ext_dates])
+L16 | print("ext days:", n_ext, "| anchor (baseline) days:", int(bmask.sum()))
+L17 | 
+L18 | idx_by_doy = defaultdict(list)
+L19 | for i, dv in enumerate(doy_ext):
+L20 |     idx_by_doy[dv].append(i)
+L21 | 
+L22 | thresh = np.empty((366, H, W), dtype=np.float64)
+L23 | clim   = np.empty((366, H, W), dtype=np.float64)
+L24 | pool_sizes = set()
+L25 | with warnings.catch_warnings():
+L26 |     warnings.simplefilter('ignore', RuntimeWarning)
+L27 |     for d in range(1, 367):
+L28 |         if d == 60:
+L29 |             continue
+L30 |         m = np.zeros(n_ext, bool)
+L31 |         for i in idx_by_doy[d]:
+L32 |             if bmask[i]:
+L33 |                 m[max(0, i-5):min(n_ext, i+6)] = True   # contiguous daily range -> index dist = calendar dist
+L34 |         vals = base_sst[m]
+L35 |         pool_sizes.add(vals.shape[0])
+L36 |         clim[d-1]   = np.nanmean(vals, axis=0)
+L37 |         thresh[d-1] = np.nanpercentile(vals, 90, axis=0, method='hazen')
+L38 | print("pool sizes (should be {121}):", pool_sizes)
+L39 | 
+L40 | # day 60 from days 59 and 61 (raw, pre-smoothing)
+L41 | clim[59]   = 0.5*(clim[58] + clim[60])
+L42 | thresh[59] = 0.5*(thresh[58] + thresh[60])
+L43 | 
+L44 | def circ_smooth31(a):
+L45 |     acc = np.zeros_like(a)
+L46 |     for k in range(-15, 16):
+L47 |         acc += np.roll(a, k, axis=0)
+L48 |     return acc / 31.0
+L49 | 
+L50 | thresh_s = circ_smooth31(thresh)
+L51 | clim_s   = circ_smooth31(clim)
+L52 | 
+L53 | # --- diagnostics on sea cells ---
+L54 | sea = np.isfinite(sst_t).all(axis=0)
+L55 | print("sea cells:", int(sea.sum()))
+L56 | sc = thresh_s[:, sea]
+L57 | cc = clim_s[:, sea]
+L58 | print("threshold smooth: finite all?", bool(np.isfinite(sc).all()), "| range K: %.3f - %.3f" % (sc.min(), sc.max()))
+L59 | print("clim smooth:      finite all?", bool(np.isfinite(cc).all()), "| range K: %.3f - %.3f" % (cc.min(), cc.max()))
+L60 | t200 = thresh_s[199][sea]; c200 = clim_s[199][sea]
+L61 | print("doy 200: mean thresh %.3f K (%.2f C), mean clim %.3f K (%.2f C)" % (t200.mean(), t200.mean()-273.15, c200.mean(), c200.mean()-273.15))
+L62 | print("target doys: %d..%d" % (mdoy(tgt_dates[0]), mdoy(tgt_dates[-1])))
+L63 | 
+L64 | np.save('/work/thresh_s.npy', thresh_s); np.save('/work/clim_s.npy', clim_s)
+L65 | print("saved thresh_s, clim_s")
+--- stdout ---
+ext days: 4028 | anchor (baseline) days: 4018
+pool sizes (should be {121}): {121}
+sea cells: 3301
+threshold smooth: finite all? True | range K: 274.511 - 294.531
+clim smooth:      finite all? True | range K: 273.491 - 291.471
+doy 200: mean thresh 293.063 K (19.91 C), mean clim 290.032 K (16.88 C)
+target doys: 153..244
+saved thresh_s, clim_s
+--- stderr ---
+(empty)
+
+=== Cell C9 (exit code 0) ===
+--- code ---
+L1  | import numpy as np, datetime as dt, json, os
+L2  | 
+L3  | sst_t    = np.load('/work/target_sst.npy')
+L4  | tgt_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L5  | thresh_s = np.load('/work/thresh_s.npy')
+L6  | T, H, W = sst_t.shape
+L7  | tdoy = np.array([ (dt.date(2001,1,1)+dt.timedelta(days=i) - dt.date(2001,1,1)).days for i in range(1)]) # dummy
+L8  | MON_CUM = np.array([0,31,60,91,121,152,182,213,244,274,305,335])
+L9  | mdoy = lambda d: int(MON_CUM[d.month-1] + d.day)
+L10 | th = thresh_s[np.array([mdoy(d)-1 for d in tgt_dates])]   # (92,H,W) threshold at each target day
+L11 | hot = sst_t >= th                                          # SST >= threshold (NaN -> False)
+L12 | 
+L13 | # runs >= 5, then join gaps of <= 2 non-hot days into a merged MHW
+L14 | def runs_mask(hot1d, minlen=5, maxgap=2):
+L15 |     n = hot1d.size
+L16 |     m = np.zeros(n, bool)
+L17 |     i = 0
+L18 |     segs = []
+L19 |     while i < n:
+L20 |         if hot1d[i]:
+L21 |             j = i
+L22 |             while j+1 < n and hot1d[j+1]: j += 1
+L23 |             if j-i+1 >= minlen: segs.append((i,j))
+L24 |             i = j+1
+L25 |         else:
+L26 |             i += 1
+L27 |     if not segs: return m
+L28 |     merged = [list(segs[0])]
+L29 |     for a,b in segs[1:]:
+L30 |         if a - merged[-1][1] - 1 <= maxgap: merged[-1][1] = b
+L31 |         else: merged.append([a,b])
+L32 |     for a,b in merged: m[a:b+1] = True
+L33 |     return m
+L34 | 
+L35 | mhw = np.zeros_like(hot)
+L36 | for r in range(H):
+L37 |     for c in range(W):
+L38 |         mhw[:,r,c] = runs_mask(hot[:,r,c])
+L39 | 
+L40 | print("per-cell MHW mask: cells-days =", int(mhw.sum()),
+L41 |       "| days with >=1 active cell:", int(mhw.any(axis=(1,2)).sum()), "of", T)
+L42 | active = mhw.any(axis=(1,2))
+L43 | # regional events = maximal runs of active days
+L44 | ev = []
+L45 | i=0
+L46 | while i < T:
+L47 |     if active[i]:
+L48 |         j=i
+L49 |         while j+1<T and active[j+1]: j+=1
+L50 |         ev.append((i,j)); i=j+1
+L51 |     else: i+=1
+L52 | events = [{"onset": tgt_dates[a].isoformat(), "end": tgt_dates[b].isoformat()} for a,b in ev]
+L53 | print("regional events:", len(events))
+L54 | for k,(a,b) in enumerate(ev):
+L55 |     print("  %d: %s -> %s  (%d days, %d active-cell-days)" % (k+1, tgt_dates[a], tgt_dates[b], b-a+1, int(mhw[a:b+1].sum())))
+L56 | nMHW_cells = int((mhw.any(axis=0)).sum())
+L57 | print("cells with >=1 MHW day: %d of 3301 sea cells" % nMHW_cells)
+L58 | hot_counts = hot.sum(axis=(1,2))
+L59 | print("hot cell-days per day: min %d max %d" % (hot_counts.min(), hot_counts.max()))
+L60 | 
+L61 | # ---------------- write outputs ----------------
+L62 | import xarray as xr
+L63 | os.makedirs('/work/output', exist_ok=True)
+L64 | ref = xr.open_dataset('/work/sample.nc', engine='h5netcdf')
+L65 | lat_vals = ref['latitude'].values[218:278].astype(np.float64)
+L66 | lon_vals = ref['longitude'].values[601:661].astype(np.float64)
+L67 | time_vals = np.array([np.datetime64(d, 'ns') for d in tgt_dates])
+L68 | ds_out = xr.Dataset(
+L69 |     {"mhw": (("time","lat","lon"), mhw.astype(np.uint8))},
+L70 |     coords={"time": time_vals, "lat": lat_vals, "lon": lon_vals},
+L71 | )
+L72 | enc = {"mhw": {"dtype":"uint8", "zlib":True, "_FillValue":None},
+L73 |        "time": {"units":"nanoseconds since 1970-01-01","dtype":"int64"}}
+L74 | ds_out.to_netcdf('/work/output/mhw_mask.nc', engine='h5netcdf', encoding=enc)
+L75 | 
+L76 | report = {
+L77 |   "region": {"lat_min": 57.85, "lat_max": 59.05, "lon_min": 21.01, "lon_max": 22.21},
+L78 |   "baseline_analysed": {"start": "1992-01-01", "end": "2002-12-31"},
+L79 |   "target_analysed": {"start": "2013-06-01", "end": "2013-08-31"},
+L80 |   "events": events,
+L81 |   "complete": True,
+L82 |   "caveats": "",
+L83 | }
+L84 | with open('/work/output/report.json','w') as f:
+L85 |     json.dump(report, f, indent=2)
+L86 | print("outputs written:", os.listdir('/work/output'))
+L87 | print(open('/work/output/report.json').read())
+--- stdout ---
+per-cell MHW mask: cells-days = 2004 | days with >=1 active cell: 31 of 92
+regional events: 2
+  1: 2013-06-01 -> 2013-06-13  (13 days, 1131 active-cell-days)
+  2: 2013-06-23 -> 2013-07-10  (18 days, 873 active-cell-days)
+cells with >=1 MHW day: 274 of 3301 sea cells
+hot cell-days per day: min 0 max 2755
+outputs written: ['mhw_mask.nc', 'report.json']
+{
+  "region": {
+    "lat_min": 57.85,
+    "lat_max": 59.05,
+    "lon_min": 21.01,
+    "lon_max": 22.21
+  },
+  "baseline_analysed": {
+    "start": "1992-01-01",
+    "end": "2002-12-31"
+  },
+  "target_analysed": {
+    "start": "2013-06-01",
+    "end": "2013-08-31"
+  },
+  "events": [
+    {
+      "onset": "2013-06-01",
+      "end": "2013-06-13"
+    },
+    {
+      "onset": "2013-06-23",
+      "end": "2013-07-10"
+    }
+  ],
+  "complete": true,
+  "caveats": ""
+}
+--- stderr ---
+(empty)
+
+=== Cell C10 (exit code 1) ===
+--- code ---
+L1  | import numpy as np, datetime as dt
+L2  | 
+L3  | sst_t    = np.load('/work/target_sst.npy')
+L4  | tgt_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L5  | thresh_s = np.load('/work/thresh_s.npy')
+L6  | MON_CUM = np.array([0,31,60,91,121,152,182,213,244,274,305,335])
+L7  | mdoy = lambda d: int(MON_CUM[d.month-1] + d.day)
+L8  | th = thresh_s[np.array([mdoy(d)-1 for d in tgt_dates])]
+L9  | hot = sst_t >= th
+L10 | T,H,W = hot.shape
+L11 | 
+L12 | # ---------- percentile method check (hazen) ----------
+L13 | rng = np.random.default_rng(0)
+L14 | ok = True
+L15 | for trial in range(200):
+L16 |     n = rng.integers(1, 300)
+L17 |     x = rng.normal(size=n)
+L18 |     p = rng.uniform(0,1)
+L19 |     xs = np.sort(x)
+L20 |     h = n*p + 0.5            # hazen plotting position
+L21 |     lo = int(np.floor(h))-1; frac = h - np.floor(h)
+L22 |     lo = min(max(lo,0), n-1); hi = min(lo+1, n-1)
+L23 |     manual = xs[lo] + frac*(xs[hi]-xs[lo])
+L24 |     npq = np.percentile(x, p*100, method='hazen')
+L25 |     if abs(manual-npq) > 1e-10: ok=False; print("MISMATCH", n, p); break
+L26 | print("hazen manual==numpy:", ok)
+L27 | # also compare with linear (type 7) to show it differs
+L28 | x = np.arange(1,122.); print("hazen q90 of 1..121:", np.percentile(x,90,method='hazen'), " linear:", np.percentile(x,90), " MATLAB-quantile-ref: 109.4 ->", 109+0.4*(110-109))
+L29 | 
+L30 | # ---------- run/gap variants ----------
+L31 | def segments(hot1d):
+L32 |     segs=[]; i=0; n=hot1d.size
+L33 |     while i<n:
+L34 |         if hot1d[i]:
+L35 |             j=i
+L36 |             while j+1<n and hot1d[j+1]: j+=1
+L37 |             segs.append((i,j)); i=j+1
+L38 |         else: i+=1
+L39 |     return segs
+L40 | 
+L41 | def variant_A(hot1d, minlen=5, maxgap=2):   # join qualifying runs if DAY-gap<=2
+L42 |     m=np.zeros(hot1d.size,bool)
+L43 |     segs=[s for s in segments(hot1d) if s[1]-s[0]+1>=minlen]
+L44 |     if not segs: return m
+L45 |     merged=[list(segs[0])]
+L46 |     for a,b in segs[1:]:
+L47 |         if a-merged[-1][1]-1<=maxgap: merged[-1][1]=b
+L48 |         else: merged.append([a,b])
+L49 |     for a,b in merged: m[a:b+1]=True
+L50 |     return m
+L51 | 
+L52 | def variant_B(hot1d, minlen=5, maxgap=2):   # join qualifying runs if NON-HOT days between <=2 (absorb everything between)
+L53 |     m=np.zeros(hot1d.size,bool)
+L54 |     segs=[s for s in segments(hot1d) if s[1]-s[0]+1>=minlen]
+L55 |     if not segs: return m
+L56 |     merged=[list(segs[0])]
+L57 |     for a,b in segs[1:]:
+L58 |         # count non-hot days between
+L59 |         gap=hot1d[merged[-1][1]+1:a]
+L60 |         if (~gap).sum()<=maxgap: merged[-1][1]=b
+L61 |         else: merged.append([a,b])
+L62 |     for a,b in merged: m[a:b+1]=True
+L63 |     return m
+L64 | 
+L65 | def variant_C(hot1d, minlen=5, maxgap=2):   # chain ALL hot runs with non-hot gaps<=2; keep chains containing a >=5 run
+L66 |     m=np.zeros(hot1d.size,bool)
+L67 |     segs=segments(hot1d)
+L68 |     if not segs: return m
+L69 |     chains=[list(segs[0])]
+L70 |     for a,b in segs[1:]:
+L71 |         gap=hot1d[chains[-1][1]+1:a]
+L72 |         if (~gap).sum()<=maxgap: chains[-1][1]=b
+L73 |         else: chains.append([a,b])
+L74 |     for a,b in chains:
+L75 |         if any(s[1]-s[0]+1>=minlen for s in segs if s[0]>=a and s[1]<=b): m[a:b+1]=True
+L76 |     return m
+L77 | 
+L78 | def variant_D(hot1d, minlen=5, maxgap=2):   # strict: gap must be exactly 1-2 days AND all gap days non-hot
+L79 |     m=np.zeros(hot1d.size,bool)
+L80 |     segs=[s for s in segments(hot1d) if s[1]-s[0]+1>=minlen]
+L81 |     if not segs: return m
+L82 |     merged=[list(segs[0])]
+L83 |     for a,b in segs[1:]:
+L84 |         gl=a-merged[-1][1]-1
+L85 |         gap=hot1d[merged[-1][1]+1:a]
+L86 |         if 1<=gl<=maxgap and not gap.any(): merged[-1][1]=b
+L87 |         else: merged.append([a,b])
+L88 |     for a,b in merged: m[a:b+1]=True
+L89 |     return m
+L90 | 
+L91 | # unit tests on hand examples
+L92 | tests = [
+L93 |  ([1,1,1,1,1],              {A:[1]*5, B:[1]*5, C:[1]*5, D:[1]*5}),
+L94 |  ([1,1,1,1],                {A:[0]*4, B:[0]*4, C:[0]*4, D:[0]*4}),
+L95 |  ([1,1,1,1,1,0,1,1,1,1,1],  {A:[1]*11, B:[1]*11, C:[1]*11, D:[1]*11}),
+L96 |  ([1,1,1,1,1,0,0,1,1,1,1,1],{A:[1]*12, B:[1]*12, C:[1]*12, D:[1]*12}),
+L97 |  ([1,1,1,1,1,0,0,0,1,1,1,1,1],{A:[1]*5+[0]*3+[1]*5, B:[1]*13, C:[1]*13, D:[1]*5+[0]*3+[1]*5}),
+L98 |  ([1,1,1,1,0,1,1,1],        {A:[0]*8, B:[0]*8, C:[0]*8, D:[0]*8}),
+L99 |  ([1,1,1,1,1,0,1,1,1],      {A:[1]*5+[0]*4, B:[1]*5+[0]*4, C:[1]*5+[0]*4, D:[1]*5+[0]*4}),
+L100|  ([1,1,1,1,1,1,1,1,0,1,1,1,1,1],{A:[1]*14, B:[1]*14, C:[1]*14, D:[1]*14}),
+L101| ]
+L102| names={A:'A',B:'B',C:'C',D:'D'}
+L103| allok=True
+L104| for sig,exp in tests:
+L105|     for f in (A,B,C,D):
+L106|         got=list(map(int, f(np.array(sig,bool))))
+L107|         if got!=exp[f]: allok=False; print("UNIT FAIL", names[f], sig, got, "exp", exp[f])
+L108| print("unit tests:", "ALL PASS" if allok else "FAIL")
+L109| 
+L110| # ---------- compare variants on real data ----------
+L111| masks={}
+L112| for f,nm in ((A,'A'),(B,'B'),(C,'C'),(D,'D')):
+L113|     m=np.zeros_like(hot)
+L114|     for r in range(H):
+L115|         for c in range(W):
+L116|             m[:,r,c]=f(hot[:,r,c])
+L117|     masks[nm]=m
+L118|     act=m.any(axis=(1,2)); evs=[]
+L119|     i=0
+L120|     while i<T:
+L121|         if act[i]:
+L122|             j=i
+L123|             while j+1<T and act[j+1]: j+=1
+L124|             evs.append((tgt_dates[i].isoformat(), tgt_dates[j].isoformat())); i=j+1
+L125|         else: i+=1
+L126|     print("variant %s: cell-days=%d, active-days=%d, cells-with-MHW=%d, events=%s" %
+L127|           (nm, m.sum(), act.sum(), m.any(axis=0).sum(), evs))
+L128| for a,b in (('A','B'),('A','C'),('A','D'),('B','C'),('B','D'),('C','D')):
+L129|     diff=(masks[a]!=masks[b]).sum()
+L130|     print("mask diff %s vs %s: %d cell-days" % (a,b,diff))
+L131| np.save('/work/hot.npy', hot)
+--- stdout ---
+MISMATCH 24 0.003365153843990387
+hazen manual==numpy: False
+hazen q90 of 1..121: 109.4  linear: 109.0  MATLAB-quantile-ref: 109.4 -> 109.4
+--- stderr ---
+Traceback (most recent call last):
+  File "<stdin>", line 93, in <module>
+NameError: name 'A' is not defined
+
+=== Cell C11 (exit code 1) ===
+--- code ---
+L1  | import numpy as np, datetime as dt
+L2  | 
+L3  | # ---------- percentile method check (hazen), fixed ----------
+L4  | rng = np.random.default_rng(0)
+L5  | ok=True
+L6  | for trial in range(500):
+L7  |     n = int(rng.integers(1,300)); x = rng.normal(size=n); p = float(rng.uniform(0,1))
+L8  |     xs = np.sort(x)
+L9  |     h = n*p + 0.5                      # hazen 1-based virtual index
+L10 |     if h < 1: manual = xs[0]
+L11 |     elif h > n: manual = xs[-1]
+L12 |     else:
+L13 |         lo = int(np.floor(h)); frac = h - lo
+L14 |         manual = xs[lo-1] + frac*(xs[min(lo,n-1)] - xs[lo-1])
+L15 |     npq = np.percentile(x, p*100, method='hazen')
+L16 |     if abs(manual-npq) > 1e-9: ok=False; print("MISMATCH", n, p, manual, npq); break
+L17 | print("hazen manual==numpy:", ok)
+L18 | x = np.arange(1,122.)
+L19 | print("pool n=121: hazen q90 =", np.percentile(x,90,method='hazen'), "| linear q90 =", np.percentile(x,90))
+L20 | 
+L21 | # ---------- run/gap variants ----------
+L22 | def segments(hot1d):
+L23 |     segs=[]; i=0; n=hot1d.size
+L24 |     while i<n:
+L25 |         if hot1d[i]:
+L26 |             j=i
+L27 |             while j+1<n and hot1d[j+1]: j+=1
+L28 |             segs.append((i,j)); i=j+1
+L29 |         else: i+=1
+L30 |     return segs
+L31 | 
+L32 | def variant_A(hot1d, minlen=5, maxgap=2):   # join qualifying runs if DAY-gap<=2
+L33 |     m=np.zeros(hot1d.size,bool)
+L34 |     segs=[s for s in segments(hot1d) if s[1]-s[0]+1>=minlen]
+L35 |     if not segs: return m
+L36 |     merged=[list(segs[0])]
+L37 |     for a,b in segs[1:]:
+L38 |         if a-merged[-1][1]-1<=maxgap: merged[-1][1]=b
+L39 |         else: merged.append([a,b])
+L40 |     for a,b in merged: m[a:b+1]=True
+L41 |     return m
+L42 | 
+L43 | def variant_B(hot1d, minlen=5, maxgap=2):   # join if NON-HOT days between <=2 (absorb hot short runs in gap)
+L44 |     m=np.zeros(hot1d.size,bool)
+L45 |     segs=[s for s in segments(hot1d) if s[1]-s[0]+1>=minlen]
+L46 |     if not segs: return m
+L47 |     merged=[list(segs[0])]
+L48 |     for a,b in segs[1:]:
+L49 |         gap=hot1d[merged[-1][1]+1:a]
+L50 |         if (~gap).sum()<=maxgap: merged[-1][1]=b
+L51 |         else: merged.append([a,b])
+L52 |     for a,b in merged: m[a:b+1]=True
+L53 |     return m
+L54 | 
+L55 | def variant_C(hot1d, minlen=5, maxgap=2):   # chain ALL hot runs w/ non-hot gaps<=2; keep chains containing a >=5 run
+L56 |     m=np.zeros(hot1d.size,bool)
+L57 |     segs=segments(hot1d)
+L58 |     if not segs: return m
+L59 |     chains=[list(segs[0])]
+L60 |     for a,b in segs[1:]:
+L61 |         gap=hot1d[chains[-1][1]+1:a]
+L62 |         if (~gap).sum()<=maxgap: chains[-1][1]=b
+L63 |         else: chains.append([a,b])
+L64 |     for a,b in chains:
+L65 |         if any(s[1]-s[0]+1>=minlen for s in segs if s[0]>=a and s[1]<=b): m[a:b+1]=True
+L66 |     return m
+L67 | 
+L68 | def variant_D(hot1d, minlen=5, maxgap=2):   # strict: gap 1-2 days, all gap days non-hot
+L69 |     m=np.zeros(hot1d.size,bool)
+L70 |     segs=[s for s in segments(hot1d) if s[1]-s[0]+1>=minlen]
+L71 |     if not segs: return m
+L72 |     merged=[list(segs[0])]
+L73 |     for a,b in segs[1:]:
+L74 |         gl=a-merged[-1][1]-1
+L75 |         gap=hot1d[merged[-1][1]+1:a]
+L76 |         if 1<=gl<=maxgap and not gap.any(): merged[-1][1]=b
+L77 |         else: merged.append([a,b])
+L78 |     for a,b in merged: m[a:b+1]=True
+L79 |     return m
+L80 | 
+L81 | A,B,C,D = variant_A, variant_B, variant_C, variant_D
+L82 | tests = [
+L83 |  ([1,1,1,1,1],              {A:[1]*5, B:[1]*5, C:[1]*5, D:[1]*5}),
+L84 |  ([1,1,1,1],                {A:[0]*4, B:[0]*4, C:[0]*4, D:[0]*4}),
+L85 |  ([1,1,1,1,1,0,1,1,1,1,1],  {A:[1]*11, B:[1]*11, C:[1]*11, D:[1]*11}),
+L86 |  ([1,1,1,1,1,0,0,1,1,1,1,1],{A:[1]*12, B:[1]*12, C:[1]*12, D:[1]*12}),
+L87 |  ([1,1,1,1,1,0,0,0,1,1,1,1,1],{A:[1]*5+[0]*3+[1]*5, B:[1]*13, C:[1]*13, D:[1]*5+[0]*3+[1]*5}),
+L88 |  ([1,1,1,1,0,1,1,1],        {A:[0]*8, B:[0]*8, C:[0]*8, D:[0]*8}),
+L89 |  ([1,1,1,1,1,0,1,1,1],      {A:[1]*5+[0]*4, B:[1]*5+[0]*4, C:[1]*5+[0]*4, D:[1]*5+[0]*4}),
+L90 |  ([1,1,1,1,1,1,1,1,0,1,1,1,1,1],{A:[1]*14, B:[1]*14, C:[1]*14, D:[1]*14}),
+L91 |  ([1,1,1,1,0,1,1,1,0,1,1,1,1,1],{A:[0]*14, B:[1]*14, C:[1]*14, D:[0]*14}),
+L92 |  ([0,1,1,1,1,1,0,0,1,1,1,1,1,0],{A:[0]+[1]*5+[0,0]+[1]*5+[0], B:[0]+[1]*12+[0], C:[0]+[1]*12+[0], D:[0]+[1]*5+[0,0]+[1]*5+[0]}),
+L93 | ]
+L94 | names={A:'A',B:'B',C:'C',D:'D'}
+L95 | allok=True
+L96 | for sig,exp in tests:
+L97 |     for f in (A,B,C,D):
+L98 |         got=list(map(int, f(np.array(sig,bool))))
+L99 |         if got!=exp[f]: allok=False; print("UNIT FAIL", names[f], sig, got, "exp", exp[f])
+L100| print("unit tests:", "ALL PASS" if allok else "FAIL")
+L101| 
+L102| # ---------- compare variants on real data ----------
+L103| hot = np.load('/work/hot.npy')
+L104| tgt_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L105| T,H,W = hot.shape
+L106| masks={}
+L107| for f,nm in ((A,'A'),(B,'B'),(C,'C'),(D,'D')):
+L108|     m=np.zeros_like(hot)
+L109|     for r in range(H):
+L110|         for c in range(W):
+L111|             m[:,r,c]=f(hot[:,r,c])
+L112|     masks[nm]=m
+L113|     act=m.any(axis=(1,2)); evs=[]
+L114|     i=0
+L115|     while i<T:
+L116|         if act[i]:
+L117|             j=i
+L118|             while j+1<T and act[j+1]: j+=1
+L119|             evs.append((tgt_dates[i].isoformat(), tgt_dates[j].isoformat())); i=j+1
+L120|         else: i+=1
+L121|     print("variant %s: cell-days=%d, active-days=%d, cells-with-MHW=%d, events=%s" %
+L122|           (nm, int(m.sum()), int(act.sum()), int(m.any(axis=0).sum()), evs))
+L123| for a,b in (('A','B'),('A','C'),('A','D'),('B','C'),('B','D'),('C','D')):
+L124|     print("mask diff %s vs %s: %d cell-days" % (a,b,int((masks[a]!=masks[b]).sum())))
+--- stdout ---
+hazen manual==numpy: True
+pool n=121: hazen q90 = 109.4 | linear q90 = 109.0
+UNIT FAIL B [1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] [1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+UNIT FAIL C [1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] [1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+UNIT FAIL C [1, 1, 1, 1, 1, 0, 1, 1, 1] [1, 1, 1, 1, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 0, 0, 0, 0]
+UNIT FAIL A [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1] [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] exp [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+UNIT FAIL B [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1] [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+UNIT FAIL D [1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1] [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] exp [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+UNIT FAIL A [0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0] [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0] exp [0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0]
+UNIT FAIL D [0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0] [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0] exp [0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0]
+unit tests: FAIL
+--- stderr ---
+Traceback (most recent call last):
+  File "<stdin>", line 103, in <module>
+  File "/usr/local/lib/python3.12/site-packages/numpy/lib/_npyio_impl.py", line 454, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/work/hot.npy'
+
+=== Cell C12 (exit code 0) ===
+--- code ---
+L1  | import numpy as np, datetime as dt
+L2  | from collections import defaultdict
+L3  | 
+L4  | # ---------- rebuild hot mask ----------
+L5  | sst_t = np.load('/work/target_sst.npy')
+L6  | tgt_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L7  | thresh_s = np.load('/work/thresh_s.npy')
+L8  | MON_CUM = np.array([0,31,60,91,121,152,182,213,244,274,305,335])
+L9  | mdoy = lambda d: int(MON_CUM[d.month-1] + d.day)
+L10 | th = thresh_s[np.array([mdoy(d)-1 for d in tgt_dates])]
+L11 | hot = sst_t >= th
+L12 | np.save('/work/hot.npy', hot)
+L13 | T,H,W = hot.shape
+L14 | 
+L15 | # ---------- DOY mapping independent check ----------
+L16 | checks = {dt.date(1992,1,1):1, dt.date(1992,2,28):59, dt.date(1992,2,29):60, dt.date(1992,3,1):61,
+L17 |           dt.date(1992,12,31):366, dt.date(2001,2,28):59, dt.date(2001,3,1):61, dt.date(2001,12,31):366,
+L18 |           dt.date(2000,2,29):60, dt.date(1996,3,1):61}
+L19 | print("DOY map check:", all(mdoy(d)==v for d,v in checks.items()))
+L20 | # 2001-01-01 + 199 == 2001-07-19 (non-leap, no Feb 29) so mdoy==ordinal for 2001
+L21 | print("2001 mdoy==ordinal for all days:", all(mdoy(dt.date(2001,1,1)+dt.timedelta(days=i))==i+1 for i in range(365)))
+L22 | print("1992 (leap) mdoy==ordinal for all days:", all(mdoy(dt.date(1992,1,1)+dt.timedelta(days=i))==i+1 for i in range(366)))
+L23 | 
+L24 | # ---------- pool construction spot check (doy 200) ----------
+L25 | base_sst = np.load('/work/base_sst.npy')
+L26 | ext_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/base_dates.npy')]
+L27 | doy_ext = np.array([mdoy(d) for d in ext_dates])
+L28 | bmask = np.array([dt.date(1992,1,1) <= d <= dt.date(2002,12,31) for d in ext_dates])
+L29 | idx_by_doy = defaultdict(list)
+L30 | for i,dv in enumerate(doy_ext): idx_by_doy[dv].append(i)
+L31 | m = np.zeros(len(ext_dates), bool)
+L32 | for i in idx_by_doy[200]:
+L33 |     if bmask[i]: m[max(0,i-5):min(len(ext_dates),i+6)] = True
+L34 | sel = [ext_dates[i] for i in np.where(m)[0]]
+L35 | print("doy200 pool: n=%d, span %s..%s" % (len(sel), sel[0], sel[-1]))
+L36 | ok200 = (len(sel)==121 and all((d.month,d.day)==(7,dd) for d in sel for dd in [d.day] if 14<=d.day<=24)
+L37 |          and all(d.year in range(1992,2003) for d in sel))
+L38 | print("doy200 pool dates are Jul 14-24 of 1992-2002:", ok200)
+L39 | # doy 1 pool: anchors Jan 1 of 1992..2002 -> Dec 27..Jan 6 each year (with wrap into 1991/2003)
+L40 | m1 = np.zeros(len(ext_dates), bool)
+L41 | for i in idx_by_doy[1]:
+L42 |     if bmask[i]: m1[max(0,i-5):min(len(ext_dates),i+6)] = True
+L43 | sel1 = [ext_dates[i] for i in np.where(m1)[0]]
+L44 | yrs = sorted(set(d.year for d in sel1)); print("doy1 pool: n=%d years=%s" % (len(sel1), yrs))
+L45 | print("doy1 includes 1991-12-27..31:", sum(1 for d in sel1 if d.year==1991)==5,
+L46 |       "| includes 2003-01-01..05:", sum(1 for d in sel1 if d.year==2003)==5)
+L47 | 
+L48 | # ---------- run/gap variants with corrected expectations ----------
+L49 | def segments(h):
+L50 |     segs=[]; i=0; n=h.size
+L51 |     while i<n:
+L52 |         if h[i]:
+L53 |             j=i
+L54 |             while j+1<n and h[j+1]: j+=1
+L55 |             segs.append((i,j)); i=j+1
+L56 |         else: i+=1
+L57 |     return segs
+L58 | def variant_A(h, minlen=5, maxgap=2):
+L59 |     m=np.zeros(h.size,bool); segs=[s for s in segments(h) if s[1]-s[0]+1>=minlen]
+L60 |     if not segs: return m
+L61 |     merged=[list(segs[0])]
+L62 |     for a,b in segs[1:]:
+L63 |         if a-merged[-1][1]-1<=maxgap: merged[-1][1]=b
+L64 |         else: merged.append([a,b])
+L65 |     for a,b in merged: m[a:b+1]=True
+L66 |     return m
+L67 | def variant_B(h, minlen=5, maxgap=2):
+L68 |     m=np.zeros(h.size,bool); segs=[s for s in segments(h) if s[1]-s[0]+1>=minlen]
+L69 |     if not segs: return m
+L70 |     merged=[list(segs[0])]
+L71 |     for a,b in segs[1:]:
+L72 |         if (~h[merged[-1][1]+1:a]).sum()<=maxgap: merged[-1][1]=b
+L73 |         else: merged.append([a,b])
+L74 |     for a,b in merged: m[a:b+1]=True
+L75 |     return m
+L76 | def variant_C(h, minlen=5, maxgap=2):
+L77 |     m=np.zeros(h.size,bool); segs=segments(h)
+L78 |     if not segs: return m
+L79 |     chains=[list(segs[0])]
+L80 |     for a,b in segs[1:]:
+L81 |         if (~h[chains[-1][1]+1:a]).sum()<=maxgap: chains[-1][1]=b
+L82 |         else: chains.append([a,b])
+L83 |     for a,b in chains:
+L84 |         if any(s[1]-s[0]+1>=minlen for s in segs if s[0]>=a and s[1]<=b): m[a:b+1]=True
+L85 |     return m
+L86 | VARS = {'A':variant_A,'B':variant_B,'C':variant_C}
+L87 | tests = [
+L88 |  ([1,1,1,1,1],                 {'A':[1]*5,'B':[1]*5,'C':[1]*5}),
+L89 |  ([1,1,1,1],                   {'A':[0]*4,'B':[0]*4,'C':[0]*4}),
+L90 |  ([1,1,1,1,1,0,1,1,1,1,1],     {'A':[1]*11,'B':[1]*11,'C':[1]*11}),
+L91 |  ([1,1,1,1,1,0,0,1,1,1,1,1],   {'A':[1]*12,'B':[1]*12,'C':[1]*12}),
+L92 |  ([1,1,1,1,1,0,0,0,1,1,1,1,1], {'A':[1]*5+[0]*3+[1]*5,'B':[1]*5+[0]*3+[1]*5,'C':[1]*5+[0]*3+[1]*5}),
+L93 |  ([1,1,1,1,0,1,1,1],           {'A':[0]*8,'B':[0]*8,'C':[0]*8}),
+L94 |  ([1,1,1,1,1,0,1,1,1],         {'A':[1]*5+[0]*4,'B':[1]*5+[0]*4,'C':[1]*9}),
+L95 |  ([1,1,1,1,1,1,1,1,0,1,1,1,1,1],{'A':[1]*14,'B':[1]*14,'C':[1]*14}),
+L96 |  ([1,1,1,1,0,1,1,1,0,1,1,1,1,1],{'A':[0]*9+[1]*5,'B':[0]*9+[1]*5,'C':[1]*14}),
+L97 |  ([0,1,1,1,1,1,0,0,1,1,1,1,1,0],{'A':[0]+[1]*12+[0],'B':[0]+[1]*12+[0],'C':[0]+[1]*12+[0]}),
+L98 |  ([1,1,1,1,1,0,1,1,1,0,1,1,1,1,1],{'A':[1]*15,'B':[1]*15,'C':[1]*15}),
+L99 |  ([1,1,1,1,1,0,1,1,1,0,0,0,1,1,1,1,1],{'A':[1]*9+[0]*3+[1]*5,'B':[1]*17,'C':[1]*17}),
+L100| ]
+L101| allok=True
+L102| for sig,exp in tests:
+L103|     for nm,f in VARS.items():
+L104|         got=list(map(int, f(np.array(sig,bool))))
+L105|         if got!=exp[nm]: allok=False; print("UNIT FAIL", nm, sig, got, "exp", exp[nm])
+L106| print("unit tests:", "ALL PASS" if allok else "FAIL")
+L107| 
+L108| # ---------- variants on real data ----------
+L109| masks={}
+L110| for nm,f in VARS.items():
+L111|     m=np.zeros_like(hot)
+L112|     for r in range(H):
+L113|         for c in range(W):
+L114|             m[:,r,c]=f(hot[:,r,c])
+L115|     masks[nm]=m
+L116|     act=m.any(axis=(1,2)); evs=[]
+L117|     i=0
+L118|     while i<T:
+L119|         if act[i]:
+L120|             j=i
+L121|             while j+1<T and act[j+1]: j+=1
+L122|             evs.append((str(tgt_dates[i]),str(tgt_dates[j]))); i=j+1
+L123|         else: i+=1
+L124|     print("variant %s: cell-days=%d active-days=%d cells=%d events=%s" %
+L125|           (nm, int(m.sum()), int(act.sum()), int(m.any(axis=0).sum()), evs))
+L126| for a,b in (('A','B'),('A','C'),('B','C')):
+L127|     d=int((masks[a]!=masks[b]).sum()); print("mask diff %s vs %s: %d cell-days" % (a,b,d))
+--- stdout ---
+DOY map check: True
+2001 mdoy==ordinal for all days: False
+1992 (leap) mdoy==ordinal for all days: True
+doy200 pool: n=121, span 1992-07-13..2002-07-23
+doy200 pool dates are Jul 14-24 of 1992-2002: True
+doy1 pool: n=121 years=[1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002]
+doy1 includes 1991-12-27..31: True | includes 2003-01-01..05: False
+UNIT FAIL A [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1] [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+UNIT FAIL A [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1]
+UNIT FAIL B [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+UNIT FAIL C [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1] exp [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+unit tests: FAIL
+variant A: cell-days=2004 active-days=31 cells=274 events=[('2013-06-01', '2013-06-13'), ('2013-06-23', '2013-07-10')]
+variant B: cell-days=2004 active-days=31 cells=274 events=[('2013-06-01', '2013-06-13'), ('2013-06-23', '2013-07-10')]
+variant C: cell-days=2337 active-days=33 cells=274 events=[('2013-06-01', '2013-06-15'), ('2013-06-23', '2013-07-10')]
+mask diff A vs B: 0 cell-days
+mask diff A vs C: 333 cell-days
+mask diff B vs C: 333 cell-days
+--- stderr ---
+(empty)
+
+=== Cell C13 (exit code 0) ===
+--- code ---
+L1  | import numpy as np, datetime as dt, xarray as xr, json
+L2  | from collections import defaultdict
+L3  | 
+L4  | base_sst = np.load('/work/base_sst.npy'); ext_dates=[dt.date.fromisoformat(str(s)) for s in np.load('/work/base_dates.npy')]
+L5  | sst_t = np.load('/work/target_sst.npy'); tgt_dates=[dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L6  | thresh_s = np.load('/work/thresh_s.npy'); clim_s = np.load('/work/clim_s.npy'); hot = np.load('/work/hot.npy')
+L7  | MON_CUM = np.array([0,31,60,91,121,152,182,213,244,274,305,335]); mdoy=lambda d:int(MON_CUM[d.month-1]+d.day)
+L8  | doy_ext = np.array([mdoy(d) for d in ext_dates])
+L9  | bmask = np.array([dt.date(1992,1,1)<=d<=dt.date(2002,12,31) for d in ext_dates])
+L10 | idx_by_doy=defaultdict(list)
+L11 | for i,dv in enumerate(doy_ext): idx_by_doy[dv].append(i)
+L12 | H=W=60
+L13 | 
+L14 | # --- 1) brute-force raw threshold & clim for a few (doy,cell), hazen manual ---
+L15 | def hazen(sorted_x, q):
+L16 |     n=len(sorted_x); h=n*q+0.5
+L17 |     if h<1: return sorted_x[0]
+L18 |     if h>n: return sorted_x[-1]
+L19 |     lo=int(h); site-g=h-lo
+L20 |     return sorted_x[lo-1]+site-g*(sorted_x[min(lo,n-1)]-sorted_x[lo-1])
+L21 | rng=np.random.default_rng(42)
+L22 | checks=[(1,30,30),(60,10,10),(153,30,30),(200,5,5),(244,59,59),(366,17,42),(80,0,0)]
+L23 | allok=True
+L24 | for d,r,c in checks:
+L25 |     if d==60: continue
+L26 |     m=np.zeros(len(ext_dates),bool)
+L27 |     for i in idx_by_doy[d]:
+L28 |         if bmask[i]: m[max(0,i-5):min(len(ext_dates),i+6)]=True
+L29 |     vals=base_sst[m][:,r,c]; vals=vals[np.isfinite(vals)]
+L30 |     tb=hazen(np.sort(vals),0.9); cb=vals.mean()
+L31 |     # raw arrays were filled pre-smoothing then overwritten by smoothed -> recompute smoothing for this cell
+L32 |     col_t=thresh_s[:,r,c]
+L33 |     # verify smoothed value at d equals mean of raw over window: need raw; recompute raw from pools
+L34 |     raw_t=np.empty(366); raw_c=np.empty(366)
+L35 |     with np.errstate(all='ignore'):
+L36 |         for dd in range(1,367):
+L37 |             if dd==60: continue
+L38 |             mm=np.zeros(len(ext_dates),bool)
+L39 |             for i in idx_by_doy[dd]:
+L40 |                 if bmask[i]: mm[max(0,i-5):min(len(ext_dates),i+6)]=True
+L41 |             v=base_sst[mm][:,r,c]; v=v[np.isfinite(v)]
+L42 |             raw_c[dd-1]=v.mean(); raw_t[dd-1]=hazen(np.sort(v),0.9)
+L43 |     raw_t[59]=0.5*(raw_t[58]+raw_t[60]); raw_c[59]=0.5*(raw_c[58]+raw_c[60])
+L44 |     def cs(a):
+L45 |         s=0.0
+L46 |         for k in range(-15,16): s+=a[(d-1-k)%366]
+L47 |         return s/31.0
+L48 |     ok = abs(cs(raw_t)-thresh_s[d-1,r,c])<1e-9 and abs(cs(raw_c)-clim_s[d-1,r,c])<1e-9
+L49 |     allok &= ok
+L50 |     if d in (1,200,366): print("doy %3d cell(%2d,%2d): n=%3d  rawT=%.4f rawC=%.4f  smoothT=%.4f smoothC=%.4f  ok=%s" % (d,r,c,len(vals),raw_t[d-1],raw_c[d-1],thresh_s[d-1,r,c],clim_s[d-1,r,c],ok))
+L51 | print("smooth/percentile brute-force checks all ok:", allok)
+L52 | 
+L53 | # --- 2) exact ties (SST == threshold) ---
+L54 | th = thresh_s[np.array([mdoy(d)-1 for d in tgt_dates])]
+L55 | ties = int(((sst_t==th)&np.isfinite(sst_t)).sum()); print("exact SST==threshold ties:", ties, "of", int(np.isfinite(sst_t).sum()))
+L56 | 
+L57 | # --- 3) variant E: join ALL hot runs with gaps<=2 into super-runs, keep super-runs length>=5 ---
+L58 | def variant_E(h,minlen=5,maxgap=2):
+L59 |     segs=[];i=0;n=h.size
+L60 |     while i<n:
+L61 |         if h[i]:
+L62 |             j=i
+L63 |             while j+1<n and h[j+1]: j+=1
+L64 |             segs.append((i,j)); i=j+1
+L65 |         else: i+=1
+L66 |     m=np.zeros(n,bool)
+L67 |     if not segs: return m
+L68 |     chains=[list(segs[0])]
+L69 |     for a,b in segs[1:]:
+L70 |         if (~h[chains[-1][1]+1:a]).sum()<=maxgap: chains[-1][1]=b
+L71 |         else: chains.append([a,b])
+L72 |     for a,b in chains:
+L73 |         if b-a+1>=minlen: m[a:b+1]=True
+L74 |     return m
+L75 | mE=np.zeros_like(hot)
+L76 | for r in range(H):
+L77 |     for c in range(W): mE[:,r,c]=variant_E(hot[:,r,c])
+L78 | mA=np.zeros_like(hot)
+L79 | def variant_A(h,minlen=5,maxgap=2):
+L80 |     segs=[];i=0;n=h.size
+L81 |     while i<n:
+L82 |         if h[i]:
+L83 |             j=i
+L84 |             while j+1<n and h[j+1]: j+=1
+L85 |             if j-i+1>=minlen: segs.append((i,j))
+L86 |             i=j+1
+L87 |         else: i+=1
+L88 |     m=np.zeros(n,bool)
+L89 |     if not segs: return m
+L90 |     merged=[list(segs[0])]
+L91 |     for a,b in segs[1:]:
+L92 |         if a-merged[-1][1]-1<=maxgap: merged[-1][1]=b
+L93 |         else: merged.append([a,b])
+L94 |     for a,b in merged: m[a:b+1]=True
+L95 |     return m
+L96 | for r in range(H):
+L97 |     for c in range(W): mA[:,r,c]=variant_A(hot[:,r,c])
+L98 | print("variant E cell-days=%d active-days=%d | diff vs A: %d" % (mE.sum(), mE.any(axis=(1,2)).sum(), (mE!=mA).sum()))
+L99 | act=mE.any(axis=(1,2)); evs=[];i=0;T=hot.shape[0]
+L100| while i<T:
+L101|     if act[i]:
+L102|         j=i
+L103|         while j+1<T and act[j+1]: j+=1
+L104|         evs.append((str(tgt_dates[i]),str(tgt_dates[j]))); i=j+1
+L105|     else: i+=1
+L106| print("variant E events:", evs)
+L107| 
+L108| # --- 4) verify written files ---
+L109| ds=xr.open_dataset('/work/output/mhw_mask.nc')
+L110| print(ds)
+L111| mhw_file=ds['mhw'].values
+L112| print("dtype:", ds['mhw'].dtype, "| sum:", int(mhw_file.sum()), "| matches recomputed A:", np.array_equal(mhw_file.astype(bool), mA))
+L113| rep=json.load(open('/work/output/report.json'))
+L114| print("report keys:", sorted(rep.keys()))
+L115| actF=mhw_file.astype(bool).any(axis=(1,2)); evsF=[];i=0
+L116| while i<T:
+L117|     if actF[i]:
+L118|         j=i
+L119|         while j+1<T and actF[i] if False else actF[j+1]: j+=1
+L120|         evsF.append((str(tgt_dates[i]),str(tgt_dates[j]))); i=j+1
+L121|     else: i+=1
+L122| print("events recomputed from file:", evsF)
+L123| print("report events match file:", [(e['onset'],e['end']) for e in rep['events']]==evsF)
+L124| print("time[0], time[-1]:", str(ds['time'].values[0])[:10], str(ds['time'].values[-1])[:10])
+L125| print("lat range:", float(ds['lat'][0]), float(ds['lat'][-1]), "| lon range:", float(ds['lon'][0]), float(ds['lon'][-1]))
+--- stdout ---
+doy   1 cell(30,30): n=121  rawT=279.2600 rawC=276.8856  smoothT=279.0040 smoothC=276.9007  ok=True
+doy 200 cell( 5, 5): n=121  rawT=293.2640 rawC=290.1044  smoothT=293.0772 smoothC=290.0536  ok=True
+doy 366 cell(17,42): n=121  rawT=278.6580 rawC=275.5414  smoothT=278.4314 smoothC=275.9039  ok=True
+smooth/percentile brute-force checks all ok: True
+exact SST==threshold ties: 0 of 303692
+variant E cell-days=3614 active-days=34 | diff vs A: 1610
+variant E events: [('2013-06-01', '2013-06-15'), ('2013-06-22', '2013-07-10')]
+<xarray.Dataset> Size: 333kB
+Dimensions:  (time: 92, lat: 60, lon: 60)
+Coordinates:
+  * time     (time) datetime64[ns] 736B 2013-06-01 2013-06-02 ... 2013-08-31
+  * lat      (lat) float64 480B 57.86 57.88 57.9 57.92 ... 59.0 59.02 59.04
+  * lon      (lon) float64 480B 21.02 21.04 21.06 21.08 ... 22.16 22.18 22.2
+Data variables:
+    mhw      (time, lat, lon) uint8 331kB ...
+dtype: uint8 | sum: 2004 | matches recomputed A: True
+report keys: ['baseline_analysed', 'caveats', 'complete', 'events', 'region', 'target_analysed']
+events recomputed from file: [('2013-06-01', '2013-06-13'), ('2013-06-23', '2013-07-10')]
+report events match file: True
+time[0], time[-1]: 2013-06-01 2013-08-31
+lat range: 57.86000061035156 59.040000915527344 | lon range: 21.01999855041504 22.19999885559082
+--- stderr ---
+(empty)
+
+=== Cell C14 (exit code 0) ===
+--- code ---
+L1  | import numpy as np, xarray as xr, json, os, datetime as dt
+L2  | 
+L3  | sst_t = np.load('/work/target_sst.npy')
+L4  | tgt_dates = [dt.date.fromisoformat(str(s)) for s in np.load('/work/target_dates.npy')]
+L5  | # sanity: kelvin range over sea cells
+L6  | sea = np.isfinite(sst_t).all(axis=0)
+L7  | vals = sst_t[:, sea]
+L8  | print("target SST over sea cells: min %.2f K (%.2f C), max %.2f K (%.2f C), mean %.2f C" %
+L9  |       (vals.min(), vals.min()-273.15, vals.max(), vals.max()-273.15, vals.mean()-273.15))
+L10 | 
+L11 | # rewrite mask with CF coord attrs, preserving variable data
+L12 | ds = xr.open_dataset('/work/output/mhw_mask.nc')
+L13 | mhw = ds['mhw'].values
+L14 | time_vals = ds['time'].values; lat_vals = ds['lat'].values; lon_vals = ds['lon'].values
+L15 | ds.close()
+L16 | ds_out = xr.Dataset({"mhw": (("time","lat","lon"), mhw)},
+L17 |     coords={"time": ("time", time_vals, {"long_name":"Time","standard_name":"time","axis":"T"}),
+L18 |             "lat":  ("lat", lat_vals, {"long_name":"latitude","units":"degrees_north","standard_name":"latitude","axis":"Y"}),
+L19 |             "lon":  ("lon", lon_vals, {"long_name":"longitude","units":"degrees_east","standard_name":"longitude","axis":"X"})},
+L20 |     attrs={"title":"Per-cell marine heatwave (MHW) mask, Baltic Sea region, Jun-Aug 2013",
+L21 |            "source":"cmems_obs-sst_bal_phy-temp_my_l4_P1D-m (SST_BAL_SST_L4_REP_OBSERVATIONS_010_016)",
+L22 |            "method":"threshold = 90th percentile (Hazen/type 5) of +-5-day day-of-year pools over 1992-2002, day 60 filled from days 59/61, circular 31-day moving mean; hot: SST >= threshold; MHW: hot runs >= 5 days joined across gaps of 1-2 non-hot days"})
+L23 | enc = {"mhw": {"dtype":"uint8","zlib":True,"_FillValue":None}}
+L24 | ds_out.to_netcdf('/work/output/mhw_mask.nc', engine='h5netcdf', encoding=enc)
+L25 | 
+L26 | # verify rewrite
+L27 | ds2 = xr.open_dataset('/work/output/mhw_mask.nc')
+L28 | assert ds2['mhw'].dtype == np.uint8 and ds2['mhw'].shape == (92,60,60)
+L29 | assert int(ds2['mhw'].values.sum()) == 2004
+L30 | print("rewritten mask OK:", dict(ds2.sizes), "sum:", int(ds2['mhw'].values.sum()))
+L31 | 
+L32 | # finalize report with caveat
+L33 | rep = {
+L34 |   "region": {"lat_min": 57.85, "lat_max": 59.05, "lon_min": 21.01, "lon_max": 22.21},
+L35 |   "baseline_analysed": {"start": "1992-01-01", "end": "2002-12-31"},
+L36 |   "target_analysed": {"start": "2013-06-01", "end": "2013-08-31"},
+L37 |   "events": [
+L38 |     {"onset": "2013-06-01", "end": "2013-06-13"},
+L39 |     {"onset": "2013-06-23", "end": "2013-07-10"}
+L40 |   ],
+L41 |   "complete": True,
+L42 |   "caveats": "Per the method, detection is restricted to 2013-06-01..2013-08-31, so events touching the period boundaries may be truncated (the first event begins on the first analysed day). Baseline pools for day-of-year 1 and 366 use the available extension days 1991-12-27..1991-12-31 and 2003-01-01..2003-01-05.",
+L43 | }
+L44 | with open('/work/output/report.json','w') as f:
+L45 |     json.dump(rep, f, indent=2)
+L46 | print(open('/work/output/report.json').read())
+L47 | print("files:", [(f, os.path.getsize('/work/output/'+f)) for f in sorted(os.listdir('/work/output'))])
+--- stdout ---
+target SST over sea cells: min 281.16 K (8.01 C), max 293.74 K (20.59 C), mean 16.39 C
+rewritten mask OK: {'time': 92, 'lat': 60, 'lon': 60} sum: 2004
+{
+  "region": {
+    "lat_min": 57.85,
+    "lat_max": 59.05,
+    "lon_min": 21.01,
+    "lon_max": 22.21
+  },
+  "baseline_analysed": {
+    "start": "1992-01-01",
+    "end": "2002-12-31"
+  },
+  "target_analysed": {
+    "start": "2013-06-01",
+    "end": "2013-08-31"
+  },
+  "events": [
+    {
+      "onset": "2013-06-01",
+      "end": "2013-06-13"
+    },
+    {
+      "onset": "2013-06-23",
+      "end": "2013-07-10"
+    }
+  ],
+  "complete": true,
+  "caveats": "Per the method, detection is restricted to 2013-06-01..2013-08-31, so events touching the period boundaries may be truncated (the first event begins on the first analysed day). Baseline pools for day-of-year 1 and 366 use the available extension days 1991-12-27..1991-12-31 and 2003-01-01..2003-01-05."
+}
+files: [('mhw_mask.nc', 21638), ('report.json', 760)]
+--- stderr ---
+(empty)
+
+## Files the run wrote (final sizes)
+
+- output/mhw_mask.nc: 21638 bytes
+- output/report.json: 760 bytes

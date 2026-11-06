@@ -1,0 +1,60 @@
+# snapshot final=true t=2026-11-06T09:00:00Z
+
+Coder pairs (amendment 26(j)), runs resolved per pair and their share, over the 2442 primary-scope run(s) the analysis selects, not this table's own runs: sol+opus 2042 (0.836); opus+sonnet 11 (0.0045)
+
+| outcome | layout | contrast | pooled_effect | pooled_ci_lo | pooled_ci_hi | pooled_direction | n_models | n_models_agreeing | cheaper_model | cheaper_effect | cheaper_ci_lo | cheaper_ci_hi | cheaper_agrees_with_pooled | cheaper_note | stronger_model | stronger_effect | stronger_ci_lo | stronger_ci_hi | stronger_agrees_with_pooled | stronger_note | pooled_effect_ratio |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| omission | S1 | T-D | -0.02133 | -0.07133 | 0.02733 | -1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0.02 | -0.08 | 0.12 | 0 | None | nan |
+| omission | S1 | T-M | -0.01524 | -0.05429 | 0.02076 | -1 | 7 | 4 | claude-haiku-5-5 | -0.02 | -0.06 | 0 | 1 | None | claude-sonnet-5-5 | 0.1 | 0.02 | 0.18 | 0 | None | nan |
+| omission | S1 | D-M | -0.00581 | -0.04581 | 0.03305 | -1 | 7 | 3 | claude-haiku-5-5 | -0.02 | -0.06 | 0 | 1 | None | claude-sonnet-5-5 | 0.08 | 0.02 | 0.16 | 0 | None | nan |
+| omission | S2 | T-D | -0.016 | -0.07105 | 0.038 | -1 | 7 | 3 | claude-haiku-5-5 | -0.04167 | -0.1304 | 0 | 1 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| omission | S2 | T-M | -0.01943 | -0.07171 | 0.02991 | -1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| omission | S2 | D-M | -0.0261 | -0.08171 | 0.0319 | -1 | 7 | 4 | claude-haiku-5-5 | 0.04167 | 0 | 0.1304 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| coverage_baseline | S1 | T-D | -0.01404 | -0.04934 | 0.02197 | -1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.08 | -0.2 | 0.04 | 1 | None | nan |
+| coverage_baseline | S1 | T-M | -0.02911 | -0.05932 | -0.0006915 | -1 | 7 | 4 | claude-haiku-5-5 | 4.132e-05 | 0 | 0.000124 | 0 | None | claude-sonnet-5-5 | -0.14 | -0.24 | -0.04 | 1 | None | nan |
+| coverage_baseline | S1 | D-M | -0.01088 | -0.03434 | 0.01232 | -1 | 7 | 3 | claude-haiku-5-5 | 4.132e-05 | 0 | 0.000124 | 0 | None | claude-sonnet-5-5 | -0.06 | -0.14 | 0 | 1 | None | nan |
+| coverage_baseline | S2 | T-D | -0.03262 | -0.07931 | 0.009614 | -1 | 7 | 4 | claude-haiku-5-5 | 0.0002296 | 0 | 0.0007186 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| coverage_baseline | S2 | T-M | 0.00228 | -0.03177 | 0.03508 | 1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| coverage_baseline | S2 | D-M | 0.03386 | 0.003384 | 0.06453 | 1 | 7 | 3 | claude-haiku-5-5 | -0.0002296 | -0.0007186 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| coverage_target | S1 | T-D | -0.01971 | -0.05705 | 0.0181 | -1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.08 | -0.2 | 0.04 | 1 | None | nan |
+| coverage_target | S1 | T-M | -0.03324 | -0.06762 | -0.001905 | -1 | 7 | 4 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.14 | -0.26 | -0.04 | 1 | None | nan |
+| coverage_target | S1 | D-M | -0.008952 | -0.03857 | 0.02705 | -1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.06 | -0.12 | 0 | 1 | None | nan |
+| coverage_target | S2 | T-D | -0.0319 | -0.0781 | 0.009048 | -1 | 7 | 1 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| coverage_target | S2 | T-M | 0.004667 | -0.02952 | 0.03857 | 1 | 7 | 2 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| coverage_target | S2 | D-M | 0.03571 | 0.005238 | 0.06667 | 1 | 7 | 2 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| event_f1 | S1 | T-D | -0.01008 | -0.03072 | 0.008254 | -1 | 7 | 4 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.02 | -0.1 | 0.06 | 1 | None | nan |
+| event_f1 | S1 | T-M | 0.0006825 | -0.01922 | 0.02411 | 1 | 7 | 4 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.08 | -0.16 | -0.02 | 0 | None | nan |
+| event_f1 | S1 | D-M | 0.003596 | -0.01731 | 0.02747 | 1 | 7 | 4 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.06 | -0.12 | 0 | 0 | None | nan |
+| event_f1 | S2 | T-D | 0.00203 | -0.02057 | 0.02766 | 1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| event_f1 | S2 | T-M | -0.008421 | -0.02773 | 0.01029 | -1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| event_f1 | S2 | D-M | 0.003295 | -0.02021 | 0.02468 | 1 | 7 | 1 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| tokens | S1 | T-D | 0.01447 | -0.161 | 0.1796 | 1 | 7 | 3 | claude-haiku-5-5 | -0.21 | -0.3807 | -0.02351 | 0 | None | claude-sonnet-5-5 | -0.04383 | -0.2396 | 0.1408 | 0 | None | 1.01 |
+| tokens | S1 | T-M | 0.3547 | 0.1678 | 0.5324 | 1 | 7 | 7 | claude-haiku-5-5 | 0.2928 | 0.1685 | 0.404 | 1 | None | claude-sonnet-5-5 | 0.9878 | 0.8663 | 1.113 | 1 | None | 1.279 |
+| tokens | S1 | D-M | 0.3402 | 0.1196 | 0.5555 | 1 | 7 | 6 | claude-haiku-5-5 | 0.5028 | 0.3426 | 0.6683 | 1 | None | claude-sonnet-5-5 | 1.032 | 0.8785 | 1.204 | 1 | None | 1.266 |
+| tokens | S2 | T-D | 0.1517 | -0.0049 | 0.3001 | 1 | 7 | 4 | claude-haiku-5-5 | -0.1695 | -0.3255 | -0.01736 | 0 | None | claude-sonnet-5-5 | -0.002055 | -0.07125 | 0.06555 | 0 | None | 1.111 |
+| tokens | S2 | T-M | -0.09761 | -0.2866 | 0.08762 | -1 | 7 | 2 | claude-haiku-5-5 | 0.0148 | -0.1492 | 0.1778 | 0 | None | claude-sonnet-5-5 | -0.02045 | -0.115 | 0.06681 | 1 | None | 0.9346 |
+| tokens | S2 | D-M | -0.2493 | -0.4479 | -0.03945 | -1 | 7 | 5 | claude-haiku-5-5 | 0.1843 | 0.02801 | 0.3367 | 0 | None | claude-sonnet-5-5 | -0.01839 | -0.1182 | 0.06965 | 1 | None | 0.8413 |
+| undisclosed | S1 | T-D | -0.02133 | -0.07133 | 0.02867 | -1 | 7 | 4 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | -0.02 | -0.06 | 0 | 1 | None | nan |
+| undisclosed | S1 | T-M | -0.03257 | -0.07457 | 0.006952 | -1 | 7 | 4 | claude-haiku-5-5 | -0.02 | -0.06 | 0 | 1 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| undisclosed | S1 | D-M | -0.01581 | -0.05781 | 0.02552 | -1 | 7 | 3 | claude-haiku-5-5 | -0.02 | -0.06 | 0 | 1 | None | claude-sonnet-5-5 | 0.02 | 0 | 0.06 | 0 | None | nan |
+| undisclosed | S2 | T-D | -0.02219 | -0.07267 | 0.02971 | -1 | 7 | 3 | claude-haiku-5-5 | -0.04167 | -0.1304 | 0 | 1 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| undisclosed | S2 | T-M | -0.02514 | -0.08086 | 0.02714 | -1 | 7 | 4 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| undisclosed | S2 | D-M | -0.008952 | -0.07095 | 0.05524 | -1 | 7 | 3 | claude-haiku-5-5 | 0.04167 | 0 | 0.1304 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| end_to_end | S1 | T-D | -0.002857 | -0.04857 | 0.04286 | -1 | 7 | 4 | claude-haiku-5-5 | -0.08 | -0.16 | -0.02 | 1 | None | claude-sonnet-5-5 | -0.02 | -0.14 | 0.1 | 1 | None | nan |
+| end_to_end | S1 | T-M | 0.02286 | -0.02857 | 0.07429 | 1 | 7 | 4 | claude-haiku-5-5 | 0.04 | -0.06 | 0.14 | 1 | None | claude-sonnet-5-5 | -0.14 | -0.2205 | -0.06 | 0 | None | nan |
+| end_to_end | S1 | D-M | 0.02571 | -0.02286 | 0.07714 | 1 | 7 | 3 | claude-haiku-5-5 | 0.12 | 0.04 | 0.2 | 1 | None | claude-sonnet-5-5 | -0.12 | -0.2 | -0.04 | 0 | None | nan |
+| end_to_end | S2 | T-D | 0.01714 | -0.03429 | 0.06857 | 1 | 7 | 4 | claude-haiku-5-5 | -0.04 | -0.16 | 0.08 | 0 | None | claude-sonnet-5-5 | 0.02 | 0 | 0.06 | 1 | None | nan |
+| end_to_end | S2 | T-M | 0.04857 | 0 | 0.09714 | 1 | 7 | 4 | claude-haiku-5-5 | 0.1 | -0.02 | 0.22 | 1 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| end_to_end | S2 | D-M | 0.03143 | -0.02286 | 0.08286 | 1 | 7 | 3 | claude-haiku-5-5 | 0.14 | 0 | 0.28 | 1 | None | claude-sonnet-5-5 | -0.02 | -0.06 | 0 | 0 | None | nan |
+| false_alarm | S1 | T-D | 0.06667 | 0.02083 | 0.1333 | 1 | 7 | 3 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| false_alarm | S1 | T-M | 0.04167 | 0 | 0.1042 | 1 | 6 | 2 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| false_alarm | S1 | D-M | 0 | 0 | 0 | 0 | 6 | 0 | claude-haiku-5-5 | 0 | 0 | 0 | nan | None | claude-sonnet-5-5 | 0 | 0 | 0 | nan | None | nan |
+| false_alarm | S2 | T-D | -0.0625 | -0.125 | -0.02083 | -1 | 7 | 1 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| false_alarm | S2 | T-M | -0.03869 | -0.08333 | 0 | -1 | 7 | 1 | claude-haiku-5-5 | 0 | 0 | 0 | 0 | None | claude-sonnet-5-5 | 0 | 0 | 0 | 0 | None | nan |
+| false_alarm | S2 | D-M | 0 | -0.0625 | 0.0625 | 0 | 7 | 0 | claude-haiku-5-5 | 0 | 0 | 0 | nan | None | claude-sonnet-5-5 | 0 | 0 | 0 | nan | None | nan |
+| bytes_between_sites | S1 | T-D | -0.4901 | -1.08 | 0.0759 | -1 | 7 | 5 | claude-haiku-5-5 | -0.03433 | -0.6084 | 0.5435 | 1 | None | claude-sonnet-5-5 | -1.666 | -3.858 | 0.1194 | 1 | None | 0.712 |
+| bytes_between_sites | S1 | T-M | -0.7227 | -1.177 | -0.2667 | -1 | 7 | 3 | claude-haiku-5-5 | 0.2988 | 0.002163 | 0.6515 | 0 | None | claude-sonnet-5-5 | -1.544 | -3.281 | -0.1623 | 1 | None | 0.606 |
+| bytes_between_sites | S1 | D-M | -0.249 | -0.6926 | 0.1732 | -1 | 7 | 3 | claude-haiku-5-5 | 0.2803 | -0.05156 | 0.6781 | 0 | None | claude-sonnet-5-5 | -0.1759 | -0.3001 | -0.04988 | 1 | None | 0.8415 |
+| bytes_between_sites | S2 | T-D | -0.8788 | -1.456 | -0.2923 | -1 | 7 | 7 | claude-haiku-5-5 | -0.3386 | -0.7853 | 0.11 | 1 | None | claude-sonnet-5-5 | -1.239 | -1.521 | -0.9429 | 1 | None | 0.5438 |
+| bytes_between_sites | S2 | T-M | -0.889 | -1.469 | -0.3141 | -1 | 7 | 7 | claude-haiku-5-5 | -0.6966 | -1.19 | -0.2518 | 1 | None | claude-sonnet-5-5 | -0.6282 | -0.9292 | -0.3367 | 1 | None | 0.54 |
+| bytes_between_sites | S2 | D-M | 0.1759 | -0.2216 | 0.5171 | 1 | 7 | 4 | claude-haiku-5-5 | -0.358 | -0.5373 | -0.186 | 0 | None | claude-sonnet-5-5 | 0.4275 | 0.1095 | 0.6962 | 1 | None | 1.13 |

@@ -1,0 +1,13 @@
+# Final confirmation message
+print("TASK COMPLETED SUCCESSFULLY")
+print("=" * 30)
+print("Marine Heatwave Detection Analysis")
+print("Region: Baltic Sea (60.09°N to 61.29°N, 20.01°E to 21.21°E)")
+print("Period: 2003-06-01 to 2003-08-31")
+print("Events detected: 4")
+print("=" * 30)
+print("Output files generated:")
+print("  - output/mhw_mask.nc")
+print("  - output/report.json")
+print("=" * 30)
+print("✅ All requirements satisfied")

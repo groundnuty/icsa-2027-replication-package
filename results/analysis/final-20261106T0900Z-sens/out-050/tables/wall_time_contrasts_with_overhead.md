@@ -1,0 +1,12 @@
+# snapshot final=true t=2026-11-06T09:00:00Z
+
+Coder pairs (amendment 26(j)), over the 2413 primary-scope run(s) the analysis selects, not this table's own runs: no inspection input, so no run has a pair
+
+| layout | contrast | wall_time_s_median_a | wall_time_s_median_b | difference_as_measured_s | overhead_s_a | overhead_s_b | overhead_status_a | overhead_status_b |
+|---|---|---|---|---|---|---|---|---|
+| S1 | T-D | 1585 | 1238 | 347.6 | nan | nan | overhead not measured | overhead not measured |
+| S1 | T-M | 1585 | 3070 | -1485 | nan | nan | overhead not measured | overhead not measured |
+| S1 | D-M | 1238 | 3070 | -1832 | nan | nan | overhead not measured | overhead not measured |
+| S2 | T-D | 1030 | 1046 | -15.78 | 0.239 | 26.69 | measured | measured |
+| S2 | T-M | 1030 | 1350 | -319.4 | 0.239 | 0.445 | measured | measured |
+| S2 | D-M | 1046 | 1350 | -303.7 | 26.69 | 0.445 | measured | measured |

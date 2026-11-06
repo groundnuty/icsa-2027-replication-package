@@ -1,0 +1,10 @@
+import fsspec,os,re,pandas as pd,xarray as xr
+fs=fsspec.filesystem('onedata')
+fl=fs.ls('icsa2027_data_20261101T090944Z/s1z',detail=False)
+print(len(fl),fl[-1])
+ds=set(re.findall(r'(\d{8})',f)[-1] for f in fl)
+need=pd.date_range('1991-12-27','2003-01-05').strftime('%Y%m%d').tolist()+pd.date_range('2019-06-01','2019-08-31').strftime('%Y%m%d').tolist()
+print([d for d in need if d not in ds][:50], [f for f in fl if not re.search(r'sst_\d{8}\.nc$',f)])
+os.makedirs('/work/d',exist_ok=True)
+fs.get(fl[0],'/work/a.nc')
+print(xr.open_dataset('/work/a.nc',engine='h5netcdf'))

@@ -1,0 +1,34 @@
+import os, json, datetime as dt
+import numpy as np
+import xarray as xr
+
+ROOT = "/data/icsa2027_data_20261101T090944Z"
+LAT0, LAT1 = 64.51, 65.71
+LON0, LON1 = 21.97, 23.17
+T0, T1 = dt.date(2019, 6, 1), dt.date(2019, 8, 31)
+
+def doy(d):
+    return dt.date(2000, d.month, d.day).timetuple().tm_yday
+
+def region_slices(lat, lon):
+    iy = np.where((lat >= LAT0 - 1e-4) & (lat <= LAT1 + 1e-4))[0]
+    ix = np.where((lon >= LON0 - 1e-4) & (lon <= LON1 + 1e-4))[0]
+    return slice(int(iy[0]), int(iy[-1]) + 1), slice(int(ix[0]), int(ix[-1]) + 1)
+
+ds = xr.open_dataset(f"{ROOT}/s2z/sst_s2.nc", engine="h5netcdf")
+print(dict(ds.sizes), list(ds.data_vars))
+tt = ds["time"].values
+print("time", tt[0], tt[-1], len(tt))
+lat = ds["latitude"].values
+lon = ds["longitude"].values
+print("lat", lat.min(), lat.max(), "step", round(float(lat[1] - lat[0]), 4))
+print("lon", lon.min(), lon.max(), "step", round(float(lon[1] - lon[0]), 4))
+ys, xs = region_slices(lat, lon)
+print("region rows", ys, "cols", xs)
+i = (T0 - dt.date(1982, 1, 1)).days
+a = ds["analysed_sst"].isel(time=i, latitude=ys, longitude=xs).values
+print("time index", i, str(tt[i])[:10])
+print("region shape", a.shape, "dtype", a.dtype)
+print("finite cells", int(np.isfinite(a).sum()), "of", a.size)
+print("min/max/mean K", float(np.nanmin(a)), float(np.nanmax(a)), float(np.nanmean(a)))
+print(a[:3, :5])

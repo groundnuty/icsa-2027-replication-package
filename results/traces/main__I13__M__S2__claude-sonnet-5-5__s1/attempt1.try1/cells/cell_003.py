@@ -1,0 +1,1 @@
+print(d.analysed_sst.attrs)

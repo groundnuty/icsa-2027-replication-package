@@ -16,6 +16,12 @@ Each `.../<folder>/inputs/inputs.json` names the source of every input in the sn
 the totals the snapshot recorded, and the K-augmentation against the counts the snapshot's K step logged. The tables' `manifest.json` is compared field by field: the fields that name the checkout and the Python
 and library versions are reported, not compared, and an input hash is compared only when the shipped input still has that hash.
 
+Six tables per result folder are shipped as regenerated from the anonymised inputs, not as the snapshot wrote them: `assignment_by_option`
+(CSV and Markdown), `slot_shares` (CSV and Markdown), `backend_shares.md` and `mixed_fixed_effects.md`. They name run slots and model backends, and
+the anonymisation replaced those names after the tables were made: the CSVs, sorted by name, came out in another row order, and in the Markdown
+tables the anonymisation spells a label with a hyphen where the data files spell the same label with an underscore. Their rows and values are
+unchanged. Run on the snapshot before anonymisation, `make check` gives all 123 files of each folder byte-identical, these six included.
+
 ## Code
 
 The code was compared with the code that ran. `BUILD-REPORT.md`, "What ran, and how this tree differs", names the commit that ran for each part of

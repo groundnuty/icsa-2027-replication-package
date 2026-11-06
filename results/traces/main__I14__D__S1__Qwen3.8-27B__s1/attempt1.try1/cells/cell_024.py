@@ -1,0 +1,18 @@
+import numpy as np
+thr = np.load('/work/data/thr_raw.npy').copy()
+thr[59] = 0.5*(thr[58] + thr[60])
+A2 = np.concatenate([thr[-15:], thr, thr[:15]], axis=0)
+W = np.lib.stride_tricks.sliding_window_view(A2, 31, axis=0)
+ts = W.mean(axis=2)
+i = 0
+naive_rows = np.array([(i+k) % 366 for k in range(-15, 16)])
+naive = thr[naive_rows].mean(axis=0)
+d = np.abs(ts[i] - naive)
+c = int(np.argmax(d))
+print("col", c, "vec", ts[i, c], "naive", naive[c], "diff", d[c])
+print("naive rows:", naive_rows)
+print("vec window values:")
+print(np.round(W[i, c, :], 6))
+print("naive window values (rows in same order):")
+print(np.round(thr[naive_rows, c], 6))
+print("equal elementwise:", np.array_equal(W[i, c, :], thr[naive_rows, c]))

@@ -1,0 +1,1 @@
+import os,subprocess;print(os.getcwd(), os.path.exists('/tmp/w/res.npz'))

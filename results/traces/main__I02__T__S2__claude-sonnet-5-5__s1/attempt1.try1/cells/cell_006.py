@@ -1,0 +1,1 @@
+print(hot.sum(),np.isnan(thr[:,sea]).sum(),(T[:,sea]-thr[td-1][:,sea]).mean())

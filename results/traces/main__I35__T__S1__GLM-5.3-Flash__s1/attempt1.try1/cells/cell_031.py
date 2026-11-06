@@ -1,0 +1,15 @@
+import xarray as xr, numpy as np, json
+ds=xr.open_dataset('/work/output/mhw_mask.nc', engine='h5netcdf')
+print(ds)
+print('mhw dtype:', ds['mhw'].dtype, 'dims:', ds['mhw'].dims)
+print('ones:', int(ds['mhw'].values.sum()), 'time n:', ds.sizes['time'])
+print('time first/last:', str(ds.time.values[0])[:10], str(ds.time.values[-1])[:10])
+print('lat first/last:', float(ds.latitude[0]), float(ds.latitude[-1]))
+print('lon first/last:', float(ds.longitude[0]), float(ds.longitude[-1]))
+# spot check: mask on 2009-06-29 (t=28) should have 3042 ones
+t=list(ds.time.values).index(np.datetime64('2009-06-29'))
+print('ones on 2009-06-29:', int(ds['mhw'].values[t].sum()))
+r=json.load(open('/work/output/report.json'))
+print('report keys:', sorted(r.keys()))
+print('events:', r['events'])
+print('complete:', r['complete'], '| baseline:', r['baseline_analysed'], '| target:', r['target_analysed'])

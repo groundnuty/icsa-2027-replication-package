@@ -1,0 +1,5 @@
+f0=fs.open(files[0],'rb')
+ds=xr.open_dataset(f0,engine='h5netcdf')
+print(ds)
+dates=sorted(f.split('_')[-1][:8] for f in files)
+print(dates[0],dates[-1])

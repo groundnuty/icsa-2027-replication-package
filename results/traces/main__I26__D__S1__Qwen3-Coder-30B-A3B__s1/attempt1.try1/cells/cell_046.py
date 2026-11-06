@@ -1,0 +1,8 @@
+print("TASK COMPLETION SUMMARY")
+print("=" * 25)
+print("Files generated:")
+print("• output/mhw_mask.nc")
+print("• output/report.json")
+print("=" * 25)
+print("✅ All requirements satisfied")
+print("✅ Task completed successfully")

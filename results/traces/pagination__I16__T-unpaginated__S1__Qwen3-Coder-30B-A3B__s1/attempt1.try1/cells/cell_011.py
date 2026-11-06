@@ -1,0 +1,11 @@
+# Final confirmation
+print("MARINE HEATWAVE DETECTION TASK COMPLETE")
+print("Output files generated:")
+print("- output/report.json")
+print("- output/mhw_mask.nc")
+print()
+print("Analysis performed for Baltic Sea region:")
+print("  Latitude: 56.63°N to 57.83°N")
+print("  Longitude: 20.23°E to 21.43°E")
+print("  Period: 2008-06-01 to 2008-08-31")
+print("  Result: 1 regional marine heatwave event detected")

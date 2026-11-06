@@ -1,0 +1,62 @@
+# snapshot final=true t=2026-11-06T09:00:00Z
+
+Coder pairs (amendment 26(j)), over the 2442 primary-scope run(s) the analysis selects, not this table's own runs: no inspection input, so no run has a pair
+
+| option | layout | model | N | n_alias | finished | finished_strict | finished_share | finished_share_strict |
+|---|---|---|---|---|---|---|---|---|
+| D | S1 | DeepSeek-V4-Flash-0731 | 50 | 2 | 47 | 45 | 0.94 | 0.9 |
+| D | S1 | GLM-5.3-Flash | 50 | 0 | 46 | 46 | 0.92 | 0.92 |
+| D | S1 | Gemma-4-31B | 50 | 36 | 47 | 11 | 0.94 | 0.22 |
+| D | S1 | Qwen3-Coder-30B-A3B | 50 | 0 | 8 | 8 | 0.16 | 0.16 |
+| D | S1 | Qwen3.8-27B | 50 | 10 | 49 | 39 | 0.98 | 0.78 |
+| D | S1 | claude-haiku-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| D | S1 | claude-sonnet-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| D | S1 | pooled | 350 | 48 | 297 | 249 | 0.8486 | 0.7114 |
+| D | S2 | DeepSeek-V4-Flash-0731 | 50 | 2 | 49 | 47 | 0.98 | 0.94 |
+| D | S2 | GLM-5.3-Flash | 50 | 2 | 41 | 39 | 0.82 | 0.78 |
+| D | S2 | Gemma-4-31B | 50 | 46 | 47 | 3 | 0.94 | 0.06 |
+| D | S2 | Qwen3-Coder-30B-A3B | 50 | 19 | 26 | 10 | 0.52 | 0.2 |
+| D | S2 | Qwen3.8-27B | 50 | 13 | 49 | 36 | 0.98 | 0.72 |
+| D | S2 | claude-haiku-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| D | S2 | claude-sonnet-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| D | S2 | pooled | 350 | 82 | 312 | 235 | 0.8914 | 0.6714 |
+| M | S1 | DeepSeek-V4-Flash-0731 | 49 | 1 | 46 | 45 | 0.9388 | 0.9184 |
+| M | S1 | GLM-5.3-Flash | 49 | 1 | 42 | 41 | 0.8571 | 0.8367 |
+| M | S1 | Gemma-4-31B | 50 | 38 | 47 | 9 | 0.94 | 0.18 |
+| M | S1 | Qwen3-Coder-30B-A3B | 50 | 1 | 8 | 8 | 0.16 | 0.16 |
+| M | S1 | Qwen3.8-27B | 50 | 9 | 48 | 39 | 0.96 | 0.78 |
+| M | S1 | claude-haiku-5-5 | 50 | 0 | 46 | 46 | 0.92 | 0.92 |
+| M | S1 | claude-sonnet-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| M | S1 | pooled | 348 | 50 | 287 | 238 | 0.8247 | 0.6839 |
+| M | S2 | DeepSeek-V4-Flash-0731 | 50 | 6 | 49 | 43 | 0.98 | 0.86 |
+| M | S2 | GLM-5.3-Flash | 50 | 2 | 47 | 45 | 0.94 | 0.9 |
+| M | S2 | Gemma-4-31B | 50 | 39 | 45 | 6 | 0.9 | 0.12 |
+| M | S2 | Qwen3-Coder-30B-A3B | 50 | 16 | 15 | 8 | 0.3 | 0.16 |
+| M | S2 | Qwen3.8-27B | 50 | 16 | 49 | 33 | 0.98 | 0.66 |
+| M | S2 | claude-haiku-5-5 | 50 | 1 | 42 | 41 | 0.84 | 0.82 |
+| M | S2 | claude-sonnet-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| M | S2 | pooled | 350 | 80 | 297 | 226 | 0.8486 | 0.6457 |
+| T | S1 | DeepSeek-V4-Flash-0731 | 50 | 2 | 50 | 48 | 1 | 0.96 |
+| T | S1 | GLM-5.3-Flash | 50 | 2 | 48 | 46 | 0.96 | 0.92 |
+| T | S1 | Gemma-4-31B | 50 | 38 | 45 | 9 | 0.9 | 0.18 |
+| T | S1 | Qwen3-Coder-30B-A3B | 50 | 2 | 11 | 11 | 0.22 | 0.22 |
+| T | S1 | Qwen3.8-27B | 50 | 15 | 49 | 34 | 0.98 | 0.68 |
+| T | S1 | claude-haiku-5-5 | 50 | 0 | 46 | 46 | 0.92 | 0.92 |
+| T | S1 | claude-sonnet-5-5 | 50 | 0 | 49 | 49 | 0.98 | 0.98 |
+| T | S1 | pooled | 350 | 59 | 298 | 243 | 0.8514 | 0.6943 |
+| T | S2 | DeepSeek-V4-Flash-0731 | 50 | 8 | 50 | 42 | 1 | 0.84 |
+| T | S2 | GLM-5.3-Flash | 50 | 1 | 45 | 44 | 0.9 | 0.88 |
+| T | S2 | Gemma-4-31B | 50 | 43 | 46 | 6 | 0.92 | 0.12 |
+| T | S2 | Qwen3-Coder-30B-A3B | 50 | 13 | 21 | 12 | 0.42 | 0.24 |
+| T | S2 | Qwen3.8-27B | 50 | 14 | 50 | 36 | 1 | 0.72 |
+| T | S2 | claude-haiku-5-5 | 50 | 0 | 47 | 47 | 0.94 | 0.94 |
+| T | S2 | claude-sonnet-5-5 | 50 | 0 | 50 | 50 | 1 | 1 |
+| T | S2 | pooled | 350 | 79 | 309 | 237 | 0.8829 | 0.6771 |
+| T-unpaginated | S1 | DeepSeek-V4-Flash-0731 | 50 | 0 | 50 | 50 | 1 | 1 |
+| T-unpaginated | S1 | GLM-5.3-Flash | 50 | 2 | 50 | 48 | 1 | 0.96 |
+| T-unpaginated | S1 | Gemma-4-31B | 50 | 40 | 47 | 8 | 0.94 | 0.16 |
+| T-unpaginated | S1 | Qwen3-Coder-30B-A3B | 50 | 1 | 11 | 10 | 0.22 | 0.2 |
+| T-unpaginated | S1 | Qwen3.8-27B | 50 | 12 | 49 | 37 | 0.98 | 0.74 |
+| T-unpaginated | S1 | claude-haiku-5-5 | 50 | 0 | 47 | 47 | 0.94 | 0.94 |
+| T-unpaginated | S1 | claude-sonnet-5-5 | 50 | 0 | 49 | 49 | 0.98 | 0.98 |
+| T-unpaginated | S1 | pooled | 350 | 55 | 303 | 249 | 0.8657 | 0.7114 |

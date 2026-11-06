@@ -1,0 +1,6 @@
+import os, collections
+d='/data/icsa2027_data_20261101T090944Z/s1z'
+files=sorted(os.listdir(d)); print(files[0],files[-1], len(files)); print([f for f in files if not f.startswith('sst_')][:5])
+dates=[f[4:12] for f in files if f.startswith('sst_')]
+print(len(dates), dates[0], dates[-1])
+print(sorted(collections.Counter(x[:4] for x in dates).items()))

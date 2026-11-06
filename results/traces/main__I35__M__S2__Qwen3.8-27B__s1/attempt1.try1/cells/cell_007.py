@@ -1,0 +1,10 @@
+import numpy as np
+cand0 = np.datetime64("1991-12-27")
+cand = cand0 + np.arange(5)
+print(cand.dtype, cand)
+i = cand.astype("int64")
+print("i:", i.dtype, i)
+y = cand.astype("datetime64[Y]")
+print("y:", y.dtype, y)
+print("y->int64:", y.astype("int64"))
+print("via days:", y.astype("datetime64[D]").astype("int64"))

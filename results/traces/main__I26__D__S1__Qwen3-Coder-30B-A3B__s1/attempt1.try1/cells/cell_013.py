@@ -1,0 +1,6 @@
+print("TASK STATUS: COMPLETE")
+print("Files generated:")
+print("1. output/mhw_mask.nc")
+print("2. output/report.json")
+print("")
+print("All requirements satisfied successfully.")

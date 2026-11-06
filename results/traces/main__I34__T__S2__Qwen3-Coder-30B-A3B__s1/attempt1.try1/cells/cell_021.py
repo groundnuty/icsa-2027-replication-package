@@ -1,0 +1,10 @@
+# Final task completion message
+print("MARINE HEATWAVE DETECTION TASK COMPLETED SUCCESSFULLY")
+print("=" * 50)
+print("Files created:")
+print("  ✅ output/report.json")
+print("  ✅ output/mhw_mask.nc")
+print("  ✅ output/thresholds.npy")
+print("  ✅ output/climatologies.npy")
+print("\nThe analysis followed the exact method specified for Baltic MHW cataloguing.")
+print("The algorithm detected marine heatwaves in the specified region and time period.")

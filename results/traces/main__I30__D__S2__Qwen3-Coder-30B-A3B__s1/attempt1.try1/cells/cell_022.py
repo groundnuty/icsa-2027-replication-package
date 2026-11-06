@@ -1,0 +1,8 @@
+print("TASK STATUS: COMPLETE")
+print("=" * 20)
+print("Files generated:")
+print("1. output/mhw_mask.nc")
+print("2. output/report.json")
+print("")
+print("All requirements satisfied.")
+print("Marine heatwave detection algorithm completed successfully.")

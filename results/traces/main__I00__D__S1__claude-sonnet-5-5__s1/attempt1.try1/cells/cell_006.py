@@ -1,0 +1,1 @@
+ok=[fs.exists(f"{p}/sst_{d:%Y%m%d}.nc") for d in [pd.Timestamp(x) for x in ['1991-12-27','1992-01-01','1998-05-05','2003-01-05','2004-08-31','2004-06-15']]];print(ok)

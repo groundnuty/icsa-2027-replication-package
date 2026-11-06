@@ -57,6 +57,7 @@ There are three ways to use this package:
 | `tools/mplus/`, `tools/octave/`, `octave_domain/` | The M+ driver and its plans; the reference detector's equivalence check under GNU Octave, for six blocks and for the whole domain |
 | `config/` | The campaign's harness and model configuration |
 | `reports/` | The reference detector's validation reports, and the whole-domain Octave run's logs and checksums |
+| `RESULTS.md`, `scripts/` | The final results, organised by what the paper reports: each value, the file that holds it, and how to reproduce it; the scripts it calls |
 | `results/` | The results of the fixed snapshot, the coding data, the trace sample and the validation and calibration results; `results/README.md` maps each path |
 | `evidence/` | Evidence logs of the knowledge plane and the sandbox's slot seam |
 

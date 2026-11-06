@@ -1,0 +1,2 @@
+import subprocess
+print(subprocess.run("pwd; ls -la; mkdir -p output && cp /tmp/output/* output/ && ls -la output && cat output/report.json && python -c \"import xarray as xr;d=xr.open_dataset('output/mhw_mask.nc');print(d)\"",shell=True,capture_output=True,text=True).stdout)

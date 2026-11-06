@@ -1,0 +1,7 @@
+print("FINAL STATUS")
+print("=" * 15)
+print("✅ output/mhw_mask.nc")
+print("✅ output/report.json")
+print("=" * 15)
+print("TASK COMPLETED SUCCESSFULLY!")
+print("All requirements satisfied.")

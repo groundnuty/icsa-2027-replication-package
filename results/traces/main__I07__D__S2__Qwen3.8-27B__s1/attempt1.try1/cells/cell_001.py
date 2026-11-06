@@ -1,0 +1,7 @@
+import fsspec, os, time
+os.makedirs('/work', exist_ok=True)
+fs = fsspec.filesystem('onedata')
+t0 = time.time()
+fs.get('icsa2027_data_20261101T090944Z/s2z/sst_s2.nc', '/work/sst_s2.nc')
+print('downloaded in', time.time()-t0, 's')
+print('size:', os.path.getsize('/work/sst_s2.nc'))

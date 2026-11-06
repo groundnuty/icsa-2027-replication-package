@@ -1,0 +1,1 @@
+print(pd.DatetimeIndex(b.time.values).is_unique,len(b.time))

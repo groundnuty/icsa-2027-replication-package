@@ -1,0 +1,65 @@
+
+import warnings; warnings.filterwarnings('ignore')
+import numpy as np, pandas as pd, json, xarray as xr, os
+os.makedirs('output',exist_ok=True)
+z=np.load('/work/sub.npz')
+sst=z['sst']; dates=pd.DatetimeIndex(z['time'].astype('datetime64[D]')); lat=z['lat']; lon=z['lon']
+def doy_of(ts):
+    m=np.asarray(ts.month); dd=np.asarray(ts.day)
+    ref=pd.DatetimeIndex([pd.Timestamp(2000,int(a),int(b)) for a,b in zip(m,dd)])
+    return ref.dayofyear.values.astype(int)
+dmap={dt:i for i,dt in enumerate(dates)}
+base_B=pd.date_range('1992-01-01','2002-12-31'); bd=doy_of(base_B)
+thr=np.full((367,60,60),np.nan)
+for d in range(1,367):
+    if d==60: continue
+    Bs=base_B[(bd==d)]
+    P=np.stack([sst[dmap[b+pd.Timedelta(days=k)]] for b in Bs for k in range(-5,6)]).reshape(-1,3600)
+    thr[d]=np.nanpercentile(P,90,axis=0,method='hazen').reshape(60,60)
+thr[60]=(thr[59]+thr[61])/2
+def smooth(a):
+    out=np.empty_like(a)
+    for i in range(366):
+        out[i]=np.mean(a[[(i+k)%366 for k in range(-15,16)]],axis=0)
+    return out
+thr_s=smooth(thr[1:])
+tgt=np.where((dates>=pd.Timestamp('2020-06-01'))&(dates<=pd.Timestamp('2020-08-31')))[0]
+T=sst[tgt]; td=dates[tgt]; tdoy=doy_of(td)
+sea=np.all(np.isfinite(T),axis=0)
+th=thr_s[tdoy-1]
+hot=(T>=th)&sea[None]&np.isfinite(th)
+def runs(b):
+    n=len(b); m=np.zeros(n,bool); i=0; rl=[]
+    while i<n:
+        if b[i]:
+            j=i
+            while j<n and b[j]: j+=1
+            if j-i>=5: rl.append([i,j-1])
+            i=j
+        else: i+=1
+    for r in rl: m[r[0]:r[1]+1]=True
+    for k in range(len(rl)-1):
+        if rl[k+1][0]-rl[k][1]-1 in (1,2): m[rl[k][1]+1:rl[k+1][0]]=True
+    return m
+mhw=np.zeros(hot.shape,np.uint8)
+for a in range(60):
+    for o in range(60):
+        if sea[a,o] and hot[:,a,o].any(): mhw[:,a,o]=runs(hot[:,a,o])
+active=mhw.reshape(len(tgt),-1).any(axis=1)
+events=[]; i=0; n=len(active)
+while i<n:
+    if active[i]:
+        j=i
+        while j<n and active[j]: j+=1
+        events.append({"onset":td[i].strftime('%Y-%m-%d'),"end":td[j-1].strftime('%Y-%m-%d')}); i=j
+    else: i+=1
+print(events, mhw.sum(), active.sum(), sea.sum())
+da=xr.DataArray(mhw, dims=('time','lat','lon'), coords={'time':td.values,'lat':lat,'lon':lon}, name='mhw')
+da.to_netcdf('output/mhw_mask.nc', engine='h5netcdf', encoding={'mhw':{'dtype':'uint8'}})
+rep={"region":{"lat_min":54.39,"lat_max":55.59,"lon_min":18.25,"lon_max":19.45},
+     "baseline_analysed":{"start":"1992-01-01","end":"2002-12-31"},
+     "target_analysed":{"start":"2020-06-01","end":"2020-08-31"},
+     "events":events,"complete":True,
+     "caveats":"Sea cells = %d of 3600 grid cells (finite on all target days); other cells are land/NaN and are 0 in the mask. Threshold/climatology use month-day DOY mapping with leap reference (Feb29=60, Dec31=366). Analysis used a local subset extracted from the 40 GB source file (region plus baseline and target windows)."%sea.sum()}
+json.dump(rep,open('output/report.json','w'),indent=2)
+chk=xr.open_dataset('output/mhw_mask.nc',engine='h5netcdf'); print(chk.mhw.dtype, dict(chk.mhw.sizes), int(chk.mhw.sum()))

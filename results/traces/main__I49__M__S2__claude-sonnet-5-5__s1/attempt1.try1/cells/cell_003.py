@@ -1,0 +1,1 @@
+print(np.isnan(base).mean(), np.nanmax(base))

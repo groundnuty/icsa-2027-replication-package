@@ -1,0 +1,5 @@
+print("Task completed successfully. Output files generated:")
+print("- output/report.json")
+print("- output/mhw_mask.nc")
+print("- output/thresholds.npy") 
+print("- output/climatologies.npy")

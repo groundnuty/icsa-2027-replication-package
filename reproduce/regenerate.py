@@ -243,14 +243,27 @@ def find_snapshot(analysis: pathlib.Path) -> pathlib.Path | str:
     if not found:
         return f"no snapshot under {analysis}: the results of the fixed snapshot are not in this copy yet (see MISSING.md)"
     if len(found) > 1:
-        return f"{len(found)} snapshots under {analysis} ({', '.join(p.name for p in found)}): name one with --snapshot"
+        main = [p for p in found if (p / "PRIMARY.json").is_file()]
+        if len(main) != 1:
+            return f"{len(found)} snapshots under {analysis} ({', '.join(p.name for p in found)}): name one with --snapshot"
+        print(f"the fixed snapshot is {main[0].name} (it holds PRIMARY.json); shipped beside it, not regenerated: "
+              f"{', '.join(p.name for p in found if p != main[0])}")
+        return main[0]
     return found[0]
 
 
 def _primary_named(snap: pathlib.Path) -> set[str]:
+    """The result folders PRIMARY.json names as the primary tables or the frozen tables beside them (not its sensitivities)."""
     p = snap / "PRIMARY.json"
     if not p.is_file():
         return set()
+    d = json.loads(p.read_text(encoding="utf-8"))
+    named = {d[k] for k in ("primary_tables", "primary_coded_tables") if isinstance(d.get(k), str)}
+    if isinstance(d.get("frozen_beside"), dict):
+        named |= {v for v in d["frozen_beside"].values() if isinstance(v, str)}
+    if named:
+        return {s for s in named if re.fullmatch(r"out[A-Za-z0-9_-]*", s)}
+    d = {k: v for k, v in d.items() if k != "sensitivities"} if isinstance(d, dict) else d
 
     def strings(o):
         if isinstance(o, str):
@@ -262,7 +275,7 @@ def _primary_named(snap: pathlib.Path) -> set[str]:
         elif isinstance(o, list):
             for v in o:
                 yield from strings(v)
-    return {s for s in strings(json.loads(p.read_text(encoding="utf-8"))) if re.fullmatch(r"out[A-Za-z0-9_-]*", s)}
+    return {s for s in strings(d) if re.fullmatch(r"out[A-Za-z0-9_-]*", s)}
 
 
 def main(argv=None) -> int:

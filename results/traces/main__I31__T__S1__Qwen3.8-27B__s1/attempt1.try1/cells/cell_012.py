@@ -1,0 +1,25 @@
+
+import fsspec, xarray as xr, numpy as np, time, os
+os.makedirs('work', exist_ok=True)
+fs = fsspec.filesystem('onedata')
+f = fs.open('/icsa2027_data_20261101T090944Z/s2z/sst_s2.nc', 'rb')
+ds = xr.open_dataset(f, engine='h5netcdf')
+lat = np.asarray(ds.latitude.values, dtype=np.float32)
+lon = np.asarray(ds.longitude.values, dtype=np.float32)
+latm = (lat >= np.float32(58.69)) & (lat <= np.float32(59.89))
+lonm = (lon >= np.float32(18.69)) & (lon <= np.float32(19.89))
+lat_i = np.where(latm)[0]; lon_i = np.where(lonm)[0]
+print("lat_i:", lat_i[0], lat_i[-1], "lon_i:", lon_i[0], lon_i[-1])
+t0 = time.time()
+S_base = ds.analysed_sst.isel(time=slice(3647, 7675), latitude=lat_i, longitude=lon_i).values.astype(np.float32)
+print("base read:", time.time()-t0, "s", S_base.shape, S_base.dtype, "finite frac:", float(np.isfinite(S_base).mean()))
+t0 = time.time()
+S_tgt = ds.analysed_sst.isel(time=slice(12935, 13027), latitude=lat_i, longitude=lon_i).values.astype(np.float32)
+print("tgt read:", time.time()-t0, "s", S_tgt.shape, S_tgt.dtype, "finite frac:", float(np.isfinite(S_tgt).mean()))
+np.save('work/S_base.npy', S_base)
+np.save('work/S_tgt.npy', S_tgt)
+np.save('work/lat.npy', lat[latm]); np.save('work/lon.npy', lon[lonm])
+# target finite per cell: sea cells
+finite_tgt = np.isfinite(S_tgt).all(axis=0)
+print("sea cells (finite all 92 days):", int(finite_tgt.sum()), "of", finite_tgt.size)
+ds.close()

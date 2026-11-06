@@ -1,0 +1,1 @@
+print(float(np.isnan(sub).mean()))

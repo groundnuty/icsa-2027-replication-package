@@ -1,0 +1,51 @@
+
+import numpy as np
+from datetime import date, timedelta
+
+dat = np.load('/tmp/sst_data.npz')
+master = dat['master']
+base_dates = [date(1991,12,27)+timedelta(days=i) for i in range(4028)]
+base_all   = [date(1992,1,1)+timedelta(days=i) for i in range(4018)]
+mdays=[31,29,31,30,31,30,31,31,30,31,30,31]; cum=[0]
+for m in mdays: cum.append(cum[-1]+m)
+doyf = lambda m,dd: cum[m-1]+dd
+
+ci = 1632
+i,k = np.unravel_index(ci,(60,60))
+print("cell 1632 -> region lat idx",i,"lon idx",k, "lat,lon:", dat['lat_r'][i], dat['lon_r'][k])
+print("cell column min/max over full master span:", np.nanmin(master[:,i,k]), np.nanmax(master[:,i,k]))
+
+dd = 197  # 15 July
+b = [x for x in base_all if doyf(x.month,x.day)==dd]
+print("baseline doy-197 dates:", b[0], "..", b[-1], "n=", len(b))
+pool = sorted(set(t for bb in b for off in range(-5,6)
+                  for t in [bb+timedelta(days=off)]
+                  if date(1991,12,27) <= t <= date(2003,1,5)))
+print("pool: n=%d, %s .. %s" % (len(pool), pool[0], pool[-1]))
+idx = np.array([(t-base_dates[0]).days for t in pool])
+vals = master[idx, i, k]
+print("pool vals: n_finite=%d, min=%.2f max=%.2f mean=%.3f" % (np.isfinite(vals).sum(), np.nanmin(vals), np.nanmax(vals), np.nanmean(vals)))
+print("hazen p90 = %.4f, linear p90 = %.4f" % (np.nanquantile(vals,0.9,method='hazen'), np.nanquantile(vals,0.9,method='linear')))
+
+# Now replicate the stage-2 pipeline arrays for this cell
+d2 = np.load('/tmp/mhw_stage2.npz')
+sea_cells = d2['sea_cells']
+j = int(np.where((sea_cells[:,0]==i)&(sea_cells[:,1]==k))[0][0])
+print("pipeline cell index j:", j)
+T = d2['T']; thrs = d2['thrs']
+print("T[44,j] (2021-07-15):", T[44,j])
+print("thrs[197,j] smoothed:", thrs[197,j])
+print("thrs around 197:", thrs[190:205, j].round(2))
+print("T around 44:", T[40:49, j].round(2))
+
+# reconstruct M column for this cell exactly as stage 2 did
+sea = None
+# recompute sea from target
+target = dat['target']
+sea_mask = np.isfinite(target).all(axis=0)
+sea2 = np.argwhere(sea_mask)
+print("sea_cells identical:", np.array_equal(sea2, sea_cells), "n:", len(sea2))
+Mcol = master[:, i, k]
+blk = Mcol[idx]
+print("recomputed raw thr[197,j]:", np.nanquantile(blk,0.9,method='hazen'))
+print("stage2 saved thrs[197,j]:", thrs[197,j])

@@ -1,0 +1,10 @@
+# Final confirmation
+print("TASK STATUS: FINAL")
+print("=" * 20)
+print("Files created:")
+print("  ✓ output/mhw_mask.nc")
+print("  ✓ output/report.json")
+print("")
+print("Process completed successfully!")
+print("Marine heatwave detection finished.")
+print("=" * 20)

@@ -1,0 +1,10 @@
+import fsspec, xarray as xr, numpy as np
+
+fs = fsspec.filesystem('onedata')
+path = "icsa2027_data_20261101T090944Z/s2z/sst_s2.nc"
+f = fs.open(path, "rb")
+ds = xr.open_dataset(f, engine="h5netcdf")
+print(ds)
+print("\n--- attrs ---")
+for k, v in ds.attrs.items():
+    print(k, ":", str(v)[:200])

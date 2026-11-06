@@ -1,0 +1,1 @@
+print(d.time.values[:3], d.time.dt.year.values[0])

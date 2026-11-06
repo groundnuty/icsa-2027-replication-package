@@ -1,0 +1,2 @@
+import os,subprocess
+print(subprocess.run("ls -la /data/icsa2027_data_20261101T090944Z/s1z | head -100; ls /data/icsa2027_data_20261101T090944Z/s1z | wc -l",shell=True,capture_output=True,text=True).stdout)

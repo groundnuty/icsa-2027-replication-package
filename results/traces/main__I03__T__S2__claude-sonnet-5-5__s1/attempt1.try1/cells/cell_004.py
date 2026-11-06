@@ -1,0 +1,10 @@
+import fsspec,xarray as xr,numpy as np,pandas as pd
+fs=fsspec.filesystem('onedata')
+f=fs.open("icsa2027_data_20261101T090944Z/s2z/sst_s2.nc","rb")
+ds=xr.open_dataset(f,engine="h5netcdf")
+sub=ds.sel(latitude=slice(54.17-1e-4,55.37+1e-4),longitude=slice(13.25-1e-4,14.45+1e-4))
+base=sub.sel(time=slice("1991-12-27","2003-01-05")).analysed_sst.load()
+tg=sub.sel(time=slice("2014-06-01","2014-08-31")).analysed_sst.load()
+print(base.shape,tg.shape,base.latitude.values[[0,-1]],base.longitude.values[[0,-1]])
+print(pd.DatetimeIndex(base.time).to_series().diff().value_counts().head(3))
+base.to_netcdf("/tmp/b.nc");tg.to_netcdf("/tmp/t.nc")

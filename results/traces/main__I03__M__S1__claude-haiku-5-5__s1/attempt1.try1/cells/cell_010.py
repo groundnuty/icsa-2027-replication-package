@@ -1,0 +1,2 @@
+import subprocess
+print(subprocess.run("ls -la /work/output; head -c 400 /work/output/report.json; python -c \"import xarray as xr;x=xr.open_dataset('/work/output/mhw_mask.nc');print(x)\"",shell=True,capture_output=True,text=True).stdout)

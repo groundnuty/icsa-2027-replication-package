@@ -1,0 +1,71 @@
+import numpy as np, datetime as dt, time
+
+t_start = time.time()
+S_base = np.load('/work/S_base.npy')
+S_tgt  = np.load('/work/S_tgt.npy')
+cr = np.load('/work/coords.npz')
+lat, lon = cr['lat'], cr['lon']
+base_dates = [dt.date.fromisoformat(str(d)) for d in cr['baseline_dates'].astype('datetime64[D]').astype(object)]
+tgt_dates  = [dt.date.fromisoformat(str(d)) for d in cr['target_dates'].astype('datetime64[D]').astype(object)]
+nd, nlat, nlon = S_base.shape
+NC = nlat*nlon
+
+def doy(d):  # month/day based, leap calendar: Feb28=59, Feb29=60, Mar1=61
+    cum = [0]
+    for L in [31,29,31,30,31,30,31,31,30,31,30,31]:
+        cum.append(cum[-1]+L)
+    return cum[d.month-1] + d.day
+assert doy(dt.date(2000,2,28))==59 and doy(dt.date(2000,2,29))==60 and doy(dt.date(2000,3,1))==61
+assert doy(dt.date(2001,3,1))==61 and doy(dt.date(2001,12,31))==366 and doy(dt.date(2001,1,1))==1
+assert doy(dt.date(2004,6,1))==153 and doy(dt.date(2004,8,31))==244
+
+base_doy = np.array([doy(d) for d in base_dates])
+tgt_doy  = np.array([doy(d) for d in tgt_dates])
+
+# 1. sea cells
+sea_cells = np.where(np.isfinite(S_tgt).all(axis=0))[0]
+print("sea cells:", sea_cells.size, "of", NC)
+
+# 2. pools
+date_to_idx = {d: i for i, d in enumerate(base_dates)}
+b_idx_by_doy = {}
+for i, d in enumerate(base_dates):
+    if dt.date(1992,1,1) <= d <= dt.date(2002,12,31):
+        b_idx_by_doy.setdefault(base_doy[i], []).append(i)
+assert 60 not in b_idx_by_doy or len(b_idx_by_doy[60]) == 3
+for d, lst in b_idx_by_doy.items():
+    assert d != 60 and len(lst) == 11, (d, len(lst))
+assert set(b_idx_by_doy) == set(range(1,367)) - {60}
+
+pool_mask = np.zeros((366, nd), dtype=bool)
+ps = []
+for d in range(1, 367):
+    if d == 60: continue
+    for bi in b_idx_by_doy[d]:
+        b = base_dates[bi]
+        for k in range(-5, 6):
+            pool_mask[d, date_to_idx[b + dt.timedelta(days=k)]] = True
+    ps.append(int(pool_mask[d].sum()))
+ps = np.array(ps)
+print("pool size min/max:", ps.min(), ps.max())
+
+thr = np.full((366, NC), np.nan)
+clim = np.full((366, NC), np.nan)
+for d in range(1, 367):
+    if d == 60: continue
+    X = S_base[pool_mask[d]].reshape(-1, NC)
+    thr[d] = np.nanquantile(X, 0.9, method='hazen', axis=0)
+    clim[d] = np.nanmean(X, axis=0)
+print("pools done", time.time()-t_start)
+
+thr[60] = 0.5*(thr[59]+thr[61]); clim[60] = 0.5*(clim[59]+clim[61])
+
+def smooth31(x):
+    padded = np.tile(x, 3)[15:15+366]
+    return np.lib.stride_tricks.sliding_window_view(padded, 31).mean(axis=1)
+thr_s = smooth31(thr); clim_s = smooth31(clim)
+print("smoothed ok; thr_s all finite:", bool(np.isfinite(thr_s).all()))
+
+np.save('/work/thr_s.npy', thr_s); np.save('/work/clim_s.npy', clim_s)
+np.save('/work/sea_cells.npy', sea_cells); np.save('/work/tgt_doy.npy', tgt_doy)
+print("CORE DONE", time.time()-t_start)

@@ -1,0 +1,661 @@
+# Run record
+
+## Task prompt
+
+You are a research assistant with a Python sandbox.
+
+**Task.** Detect marine heatwaves (MHWs) in one region of the Baltic Sea over one period, using the dataset `cmems_obs-sst_bal_phy-temp_my_l4_P1D-m`, the Copernicus Marine Baltic Sea sea-surface temperature product (reprocessed, level 4, daily). Your dataset tools describe its contents.
+
+- Region: grid cells with latitude from 57.83 to 59.03 °N and longitude from 17.41 to 18.61 °E, bounds inclusive.
+- Target period: 2007-06-01 to 2007-08-31, inclusive.
+
+**Method.** Follow it exactly; it is the method of a published Baltic MHW catalogue.
+1. *Sea cells* are the region's grid cells whose SST is finite on every day of the target period.
+2. *Threshold and climatology*, per sea cell and day of year, come from the baseline years 1992–2002.
+   - Map every date to a day of year from 1 to 366 by month and day: 1 January = 1, 28 February = 59, 29 February = 60, 1 March = 61, …, 31 December = 366. Non-leap years have no day 60.
+   - For each day of year d other than 60, the pool is every SST value whose date lies within ±5 calendar days of a baseline date (1992-01-01 to 2002-12-31) whose day of year is d. Windows near the ends of the baseline reach up to 5 days beyond it (1991-12-27 to 1991-12-31 and 2003-01-01 to 2003-01-05); include those days. 29 February values belong to the windows of their calendar neighbours. Day 60 gets no pool of its own.
+   - The threshold is the 90th percentile of the pool, computed as MATLAB's `quantile` does by default, which is numpy's `method="hazen"` (Hyndman–Fan type 5), ignoring NaN.
+   - The climatology is the mean of the pool, ignoring NaN.
+   - In both the threshold and the climatology, set day 60 to the mean of days 59 and 61.
+   - Then smooth each of them, as a 366-element array, with an unweighted centred 31-day moving mean that wraps around the year (day d averages days d−15 … d+15, counted modulo 366).
+3. *Per-cell MHWs*, over the target period only. Restrict SST to 2007-06-01–2007-08-31 before finding hot runs and joining gaps; do not use days outside it.
+   - a day is hot in a cell if its SST, in kelvin as stored, is greater than or equal to that cell's threshold for that day of year;
+   - a per-cell MHW is a run of at least 5 consecutive hot days;
+   - per-cell MHWs separated by 1 or 2 non-hot days are joined into one, and the gap days belong to it.
+4. *Regional events:*
+   - a day is active if at least one sea cell of the region is inside a per-cell MHW on that day;
+   - a regional MHW event is a maximal run of consecutive active days, so it ends when no cell of the region is in an MHW for at least one day.
+
+Compute thresholds, climatology, smoothing and comparisons in double precision (float64).
+
+**Tools.** You have tools that describe the dataset (discovery and metadata), and a Python tool that runs your code in the sandbox and returns its printed output.
+- Printed output is truncated to 8000 characters per call, so do not print large arrays.
+- You may use at most 230 rounds of tool calls, 12190000 tokens and 490 minutes in total.
+
+**Data access.** The dataset is stored on a Onedata research-data platform, in the file `icsa2027_data_20261101T090944Z/s2z/sst_s2.nc`. In your sandbox, `fs = fsspec.filesystem('onedata')` gives a preconfigured, authenticated fsspec filesystem for the platform. `fs.open(path, "rb")` reads a file remotely over the platform's REST API; open the returned file object with xarray (for example `xarray.open_dataset(f, engine="h5netcdf")`).
+
+**Results.** Before you finish, your code must write two files:
+- `output/mhw_mask.nc`: NetCDF with one variable `mhw` of type uint8 and dimensions (`time`, `lat`, `lon`).
+  - It covers the region's grid cells and the target days you analysed, with the dataset's coordinate values. If you analysed no target days, write it with an empty `time` dimension.
+  - `mhw` is 1 where the cell is inside a per-cell MHW on that day, and 0 otherwise (land cells are 0).
+- `output/report.json`: an object with exactly these fields:
+  - `region`: `{"lat_min": number, "lat_max": number, "lon_min": number, "lon_max": number}`, the region you analysed;
+  - `baseline_analysed`: `{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`, the first and last baseline day (inclusive) your threshold and climatology used, or `null` if none;
+  - `target_analysed`: `{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`, the first and last target day (inclusive) you analysed, or `null` if none;
+  - `events`: a list of `{"onset": "YYYY-MM-DD", "end": "YYYY-MM-DD"}`, one per regional event, in time order, where `end` is the event's last active day; empty if there are none;
+  - `complete`: `true` if you consider your analysis complete, otherwise `false`;
+  - `caveats`: a string, which may be empty.
+
+When both files are written, reply with a short final message and no tool call. That ends the task.
+
+## Code cells, in the order they ran
+
+=== Cell C1 (exit code 1) ===
+--- code ---
+L1  | import xarray as xr
+L2  | import numpy as np
+L3  | import pandas as pd
+L4  | import fsspec
+L5  | import json
+L6  | import os
+L7  | 
+L8  | # Configuration
+L9  | region = {"lat_min": 57.83, "lat_max": 59.03, "lon_min": 17.41, "lon_max": 18.61}
+L10 | target_start = "2007-06-01"
+L11 | target_end = "2007-08-31"
+L12 | baseline_start = "1992-01-01"
+L13 | baseline_end = "2002-12-31"
+L14 | file_path = "icsa2027_data_20261101T090944Z/s2z/sst_s2.nc"
+L15 | 
+L16 | def get_doy(date):
+L17 |     month = date.month
+L18 |     day = date.day
+L19 |     month_lengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+L20 |     return sum(month_lengths[:month-1]) + day
+L21 | 
+L22 | def get_baseline_dates_for_doy(d, baseline_dates):
+L23 |     # d is the DOY (1-366)
+L24 |     # baseline_dates is a pd.DatetimeIndex from 1992-01-01 to 2002-12-31
+L25 |     # Find all dates in baseline_dates with DOY == d
+L26 |     # Then for each, add +/- 5 days window.
+L27 |     
+L28 |     # Filter baseline dates with DOY d
+L29 |     # Note: get_doy is slow for large arrays, so maybe precalculate
+L30 |     matching_dates = [t for t in baseline_dates if get_doy(t) == d]
+L31 |     
+L32 |     pool_dates = set()
+L33 |     for t_base in matching_dates:
+L34 |         window = pd.date_range(t_base - pd.Timedelta(days=5), t_base + pd.Timedelta(days=5))
+L35 |         pool_dates.update(window)
+L36 |     
+L37 |     return sorted(list(pool_dates))
+L38 | 
+L39 | # Start processing
+L40 | fs = fsspec.filesystem('onedata')
+L41 | with fs.open(file_path, "rb") as f:
+L42 |     ds = xr.open_dataset(f, engine="h5netcdf")
+L43 | 
+L44 | print("Dataset coordinates:", ds.coords)
+L45 | print("Dataset variables:", ds.data_vars)
+L46 | 
+L47 | # Slice region
+L48 | ds_region = ds.sel(
+L49 |     lat=slice(region["lat_min"], region["lat_max"]),
+L50 |     lon=slice(region["lon_min"], region["lon_max"])
+L51 | )
+L52 | 
+L53 | # We need SST for the baseline and target periods.
+L54 | # The baseline windows can extend slightly outside 1992-2002.
+L55 | # Baseline: 1992-01-01 to 2002-12-31. 
+L56 | # Windows: +/- 5 days.
+L57 | # Min date: 1992-01-01 - 5 days = 1991-12-27
+L58 | # Max date: 2002-12-31 + 5 days = 2003-01-05
+L59 | # Target: 2007-06-01 to 2007-08-31
+L60 | 
+L61 | # To be safe, load all necessary time slices
+L62 | all_times = np.concatenate([
+L63 |     pd.date_range("1991-12-27", "2003-01-05"),
+L64 |     pd.date_range(target_start, target_end)
+L65 | ])
+L66 | 
+L67 | # Convert all_times to the dataset's time format (likely datetime64)
+L68 | # The dataset likely has a 'time' coordinate.
+L69 | # Let's check if we can just use slice/sel.
+L70 | 
+L71 | # Slice by time
+L72 | # We'll do this in two parts to avoid loading too much if needed, 
+L73 | # but these are small enough.
+L74 | ds_baseline_ext = ds_region.sel(time=slice("1991-12-27", "2003-01-05"))
+L75 | ds_target = ds_region.sel(time=slice(target_start, target_end))
+L76 | 
+L77 | # Keep only SST (the variable is likely 'thetao' or 'sst')
+L78 | # Checking the variable name from the dataset tools if possible, but I'll use the printed data_vars.
+L79 | # Based on typical CMEMS SST, it's likely 'sst'.
+L80 | var_name = 'sst' if 'sst' in ds.data_vars else 'thetao'
+L81 | sst_baseline_ext = ds_baseline_ext[var_name].astype(np.float64)
+L82 | sst_target = ds_target[var_name].astype(np.float64)
+L83 | 
+L84 | print("SST baseline shape:", sst_baseline_ext.shape)
+L85 | print("SST target shape:", sst_target.shape)
+--- stdout ---
+Dataset coordinates: Coordinates:
+  * time       (time) datetime64[ns] 123kB 1982-01-01 1982-01-02 ... 2023-12-31
+  * latitude   (latitude) float32 3kB 53.5 53.52 53.54 ... 65.96 65.98 66.0
+  * longitude  (longitude) float32 4kB 9.0 9.02 9.04 9.06 ... 29.96 29.98 30.0
+Dataset variables: Data variables:
+    analysed_sst  (time, latitude, longitude) float32 40GB ...
+--- stderr ---
+Traceback (most recent call last):
+  File "<stdin>", line 48, in <module>
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/dataset.py", line 3076, in sel
+    query_results = map_index_queries(
+                    ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/indexing.py", line 211, in map_index_queries
+    grouped_indexers = group_indexers_by_index(obj, indexers, options)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/indexing.py", line 172, in group_indexers_by_index
+    raise KeyError(
+KeyError: "'lat' is not a valid dimension or coordinate for Dataset with dimensions FrozenMappingWarningOnValuesAccess({'time': 15340, 'latitude': 626, 'longitude': 1051})"
+
+=== Cell C2 (exit code 1) ===
+--- code ---
+L1  | import xarray as xr
+L2  | import numpy as np
+L3  | import pandas as pd
+L4  | import fsspec
+L5  | import json
+L6  | import os
+L7  | from datetime import timedelta
+L8  | 
+L9  | # Configuration
+L10 | region = {"lat_min": 57.83, "lat_max": 59.03, "lon_min": 17.41, "lon_max": 18.61}
+L11 | target_start_str = "2007-06-01"
+L12 | target_end_str = "2007-08-31"
+L13 | baseline_start_str = "1992-01-01"
+L14 | baseline_end_str = "2002-12-31"
+L15 | file_path = "icsa2027_data_20261101T090944Z/s2z/sst_s2.nc"
+L16 | 
+L17 | def get_doy_fixed(date):
+L18 |     month_lengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+L19 |     return sum(month_lengths[:date.month - 1]) + date.day
+L20 | 
+L21 | # 1. Load and slice data
+L22 | fs = fsspec.filesystem('onedata')
+L23 | with fs.open(file_path, "rb") as f:
+L24 |     ds = xr.open_dataset(f, engine="h5netcdf")
+L25 | 
+L26 | # Variable name and coords
+L27 | var_name = 'analysed_sst'
+L28 | lat_name = 'latitude'
+L29 | lon_name = 'longitude'
+L30 | 
+L31 | # Slice region first to reduce size
+L32 | ds_region = ds.sel(
+L33 |     latitude=slice(region["lat_min"], region["lat_max"]),
+L34 |     longitude=slice(region["lon_min"], region["lon_max"])
+L35 | )
+L36 | 
+L37 | # Time slices
+L38 | # Baseline pool windows can extend from 1991-12-27 to 2003-01-05
+L39 | ds_baseline_ext = ds_region.sel(time=slice("1991-12-27", "2003-01-05")).load()
+L40 | ds_target = ds_region.sel(time=slice(target_start_str, target_end_str)).load()
+L41 | 
+L42 | sst_baseline_ext = ds_baseline_ext[var_name].astype(np.float64)
+L43 | sst_target = ds_target[var_name].astype(np.float64)
+L44 | 
+L45 | # Coordinates for final mask
+L46 | target_times = ds_target.time.values
+L47 | target_lats = ds_target.latitude.values
+L48 | target_lons = ds_target.longitude.values
+L49 | 
+L50 | # 2. Threshold and Climatology
+L51 | # Setup indices
+L52 | time_idx = sst_baseline_ext.time
+L53 | baseline_dates = pd.to_datetime(time_idx.values)
+L54 | 
+L55 | # Find baseline dates that are actually within 1992-01-01 to 2002-12-31
+L56 | baseline_mask = (baseline_dates >= pd.Timestamp(baseline_start_str)) & (baseline_dates <= pd.Timestamp(baseline_end_str))
+L57 | baseline_core_dates = baseline_dates[baseline_mask]
+L58 | 
+L59 | # Precompute DOY for all dates in the extended baseline
+L60 | all_baseline_doy = np.array([get_doy_fixed(t) for t in baseline_dates])
+L61 | 
+L62 | # Arrays for threshold and climatology: (lat, lon, doy)
+L63 | # doy is 1-366, so we use index 0-365 (doy-1)
+L64 | n_lat = len(target_lats)
+L65 | n_lon = len(target_lons)
+L66 | thresholds = np.full((n_lat, n_lon, 366), np.nan, dtype=np.float64)
+L67 | climatologies = np.full((n_lat, n_lon, 366), np.nan, dtype=np.float64)
+L68 | 
+L69 | # Map of dates to their indices in sst_baseline_ext
+L70 | date_to_idx = {date: i for i, date in enumerate(baseline_dates)}
+L71 | 
+L72 | for d in range(1, 367):
+L73 |     if d == 60:
+L74 |         continue
+L75 |     
+L76 |     # Find baseline dates with DOY == d
+L77 |     # Use a loop over the baseline_core_dates
+L78 |     pool_indices = []
+L79 |     for t_base in baseline_core_dates:
+L80 |         if get_doy_fixed(t_base) == d:
+L81 |             # Window +/- 5 days
+L82 |             for offset in range(-5, 6):
+L83 |                 t_window = t_base + timedelta(days=offset)
+L84 |                 if t_window in date_to_idx:
+L85 |                     pool_indices.append(date_to_idx[t_window])
+L86 |     
+L87 |     if pool_indices:
+L88 |         # Extract pool for all cells: (len(pool), lat, lon)
+L89 |         pool_data = sst_baseline_ext.values[pool_indices, :, :]
+L90 |         
+L91 |         # Compute 90th percentile (Hazen) and mean across the first dimension (time)
+L92 |         # numpy.quantile(..., method='hazen')
+L93 |         thresholds[:, :, d-1] = np.nanquantile(pool_data, 0.9, axis=0, method='hazen')
+L94 |         climatologies[:, :, d-1] = np.nanmean(pool_data, axis=0)
+L95 | 
+L96 | # Handle day 60: mean of 59 and 61
+L97 | thresholds[:, :, 59] = (thresholds[:, :, 58] + thresholds[:, :, 60]) / 2
+L98 | climatologies[:, :, 59] = (climatologies[:, :, 58] + climatologies[:, :, 60]) / 2
+L99 | 
+L100| # Smoothing: 31-day centred moving mean (wraps around)
+L101| def smooth_366(arr):
+L102|     # arr: (lat, lon, 366)
+L103|     smoothed = np.zeros_like(arr)
+L104|     for d in range(366):
+L105|         # Days d-15 to d+15 (mod 366)
+L106|         indices = [(d + offset) % 366 for offset in range(-15, 16)]
+L107|         # Average across the 31 days
+L108|         smoothed[:, :, d] = np.nanmean(arr[:, :, indices], axis=-1)
+L109|     return smoothed
+L110| 
+L111| thresholds_smooth = smooth_366(thresholds)
+L112| climatologies_smooth = smooth_366(climatologies)
+L113| 
+L114| # 3. Per-cell MHWs
+L115| # target_sst: (time, lat, lon)
+L116| # thresholds_smooth: (lat, lon, 366)
+L117| target_sst_vals = sst_target.values
+L118| target_dates = pd.to_datetime(target_times)
+L119| target_doys = np.array([get_doy_fixed(t) for t in target_dates])
+L120| 
+L121| # hot_mask: (time, lat, lon)
+L122| hot_mask = np.zeros(target_sst_vals.shape, dtype=bool)
+L123| 
+L124| for t_idx, doy in enumerate(target_doys):
+L125|     # threshold for this day: (lat, lon)
+L126|     thresh_day = thresholds_smooth[:, :, doy-1]
+L127|     # SST for this day: (lat, lon)
+L128|     sst_day = target_sst_vals[t_idx, :, :]
+L129|     hot_mask[t_idx, :, :] = sst_day >= thresh_day
+L130| 
+L131| # Find and join MHWs for each cell
+L132| # mhw_mask: (time, lat, lon)
+L133| mhw_mask = np.zeros(target_sst_vals.shape, dtype=np.uint8)
+L134| 
+L135| for i in range(n_lat):
+L136|     for j in range(n_lon):
+L137|         cell_hot = hot_mask[:, i, j]
+L138|         cell_mhw = np.zeros(len(cell_hot), dtype=np.uint8)
+L139|         
+L140|         # Find runs of hot days
+L141|         # a run of at least 5 consecutive hot days
+L142|         # join gaps of 1 or 2 non-hot days
+L143|         
+L144|         # Identify all hot runs
+L145|         # Logic: 
+L146|         # 1. Find all contiguous blocks of hot days.
+L147|         # 2. If length >= 5, mark as MHW.
+L148|         # 3. Join MHWs if separated by 1 or 2 non-hot days.
+L149|         
+L150|         # Simpler: 
+L151|         # Step 1: Find runs >= 5.
+L152|         # Step 2: Repeatedly join any two MHW regions separated by <= 2 days.
+L153|         
+L154|         # Use a temporary array to mark initial MHWs
+L155|         temp_mhw = np.zeros(len(cell_hot), dtype=bool)
+L156|         
+L157|         # Find all runs
+L158|         start = None
+L159|         for t in range(len(cell_hot)):
+L160|             if cell_hot[t] and start is None:
+L161|                 start = t
+L162|             elif not cell_hot[t] and start is not None:
+L163|                 if t - start >= 5:
+L164|                     temp_mhw[start:t] = True
+L165|                 start = None
+L166|         if start is not None and len(cell_hot) - start >= 5:
+L167|             temp_mhw[start:] = True
+L168|             
+L169|         # Join gaps of 1 or 2 days
+L170|         # Repeat joining until no more joins possible
+L171|         while True:
+L172|             changed = False
+L173|             # Find gaps of 1 or 2
+L174|             # a gap of 1: temp_mhw[t] == 0 and temp_mhw[t-1] == 1 and temp_mhw[t+1] == 1
+L175|             # a gap of 2: temp_mhw[t] == 0 and temp_mhw[t+1] == 0 and temp_mhw[t-1] == 1 and temp_mhw[t+2] == 1
+L176|             for t in range(1, len(temp_mhw) - 1):
+L177|                 if not temp_mhw[t] and temp_mhw[t-1] and temp_mhw[t+1]:
+L178|                     temp_mhw[t] = True
+L179|                     changed = True
+L180|             for t in range(1, len(temp_mhw) - 2):
+L181|                 if not temp_mhw[t] and not temp_mhw[t+1] and temp_mhw[t-1] and temp_mhw[t+2]:
+L182|                     temp_mhw[t] = True
+L183|                     temp_mhw[t+1] = True
+L184|                     changed = True
+L185|             if not changed:
+L186|                 break
+L187|         
+L188|         cell_mhw[:] = temp_mhw.astype(np.uint8)
+L189|         mhw_mask[:, i, j] = cell_mhw
+L190| 
+L191| # 4. Regional Events
+L192| # active_days: (time)
+L193| active_days = np.any(mhw_mask == 1, axis=(1, 2))
+L194| 
+L195| regional_events = []
+L196| start = None
+L197| for t in range(len(active_days)):
+L198|     if active_days[t] and start is None:
+L199|         start = t
+L200|     elif not active_days[t] and start is not None:
+L201|         regional_events.append({
+L202|             "onset": target_dates[start].strftime("%Y-%m-%d"),
+L203|             "end": target_dates[t-1].strftime("%Y-%m-%d")
+L204|         })
+L205|         start = None
+L206| if start is not None:
+L207|     regional_events.append({
+L208|         "onset": target_dates[start].strftime("%Y-%m-%d"),
+L209|         "end": target_dates[-1].strftime("%Y-%m-%d")
+L210|     })
+L211| 
+L212| # Save output
+L213| os.makedirs("output", exist_ok=True)
+L214| 
+L215| # mhw_mask.nc
+L216| # Dimensions: time, lat, lon
+L217| # Time: target_times
+L218| # Lat: target_lats
+L219| # Lon: target_lons
+L220| mhw_ds = xr.Dataset(
+L221|     {"mhw": (("time", "latitude", "longitude"), mhw_mask)},
+L222|     coords={"time": target_times, "latitude": target_lats, "longitude": target_lons}
+L223| )
+L224| mhw_ds.to_netcdf("output/mhw_mask.nc")
+L225| 
+L226| # report.json
+L227| report = {
+L228|     "region": region,
+L229|     "baseline_analysed": {
+L230|         "start": baseline_core_dates[0].strftime("%Y-%m-%d"),
+L231|         "end": baseline_core_dates[-1].strftime("%Y-%m-%d")
+L232|     },
+L233|     "target_analysed": {
+L234|         "start": target_dates[0].strftime("%Y-%m-%d"),
+L235|         "end": target_dates[-1].strftime("%Y-%m-%d")
+L236|     },
+L237|     "events": regional_events,
+L238|     "complete": True,
+L239|     "caveats": ""
+L240| }
+L241| with open("output/report.json", "w") as f:
+L242|     json.dump(report, f)
+L243| 
+L244| print("Processing complete.")
+--- stdout ---
+(empty)
+--- stderr ---
+Traceback (most recent call last):
+  File "<stdin>", line 39, in <module>
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/dataset.py", line 604, in load
+    [v.load() for k, v in self.variables.items() if k not in chunked_data]
+     ^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/variable.py", line 1036, in load
+    self._data = to_duck_array(self._data, **kwargs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/xarray/namedarray/pycompat.py", line 143, in to_duck_array
+    return data.get_duck_array()  # type: ignore[no-untyped-call, no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/indexing.py", line 976, in get_duck_array
+    duck_array = self.array.get_duck_array()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/xarray/core/indexing.py", line 930, in get_duck_array
+    return self.array.get_duck_a
+[... 830 characters omitted ...]
+, line 728, in __getitem__
+    return h5ds[key]
+           ~~~~^^^^^
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "/usr/local/lib/python3.12/site-packages/h5py/_hl/dataset.py", line 872, in __getitem__
+    return self._fast_reader.read(args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/_selector.pyx", line 393, in h5py._selector.Reader.read
+  File "h5py/h5fd.pyx", line 159, in h5py.h5fd.H5FD_fileobj_read
+  File "/usr/local/lib/python3.12/site-packages/fsspec/spec.py", line 2207, in readinto
+    data = self.read(out.nbytes)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/fsspec/spec.py", line 2185, in read
+    raise ValueError("I/O operation on closed file.")
+ValueError: I/O operation on closed file.
+
+=== Cell C3 (exit code 0) ===
+--- code ---
+L1  | import xarray as xr
+L2  | import numpy as np
+L3  | import pandas as pd
+L4  | import fsspec
+L5  | import json
+L6  | import os
+L7  | from datetime import timedelta
+L8  | 
+L9  | # Configuration
+L10 | region = {"lat_min": 57.83, "lat_max": 59.03, "lon_min": 17.41, "lon_max": 18.61}
+L11 | target_start_str = "2007-06-01"
+L12 | target_end_str = "2007-08-31"
+L13 | baseline_start_str = "1992-01-01"
+L14 | baseline_end_str = "2002-12-31"
+L15 | file_path = "icsa2027_data_20261101T090944Z/s2z/sst_s2.nc"
+L16 | 
+L17 | def get_doy_custom(date):
+L18 |     """Map date to 1-366 according to the specific rule."""
+L19 |     month = date.month
+L20 |     day = date.day
+L21 |     # Standard month lengths for a leap year
+L22 |     month_lengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+L23 |     return sum(month_lengths[:month-1]) + day
+L24 | 
+L25 | # 1. Load and slice data
+L26 | fs = fsspec.filesystem('onedata')
+L27 | with fs.open(file_path, "rb") as f:
+L28 |     ds = xr.open_dataset(f, engine="h5netcdf")
+L29 |     
+L30 |     var_name = 'analysed_sst'
+L31 |     lat_name = 'latitude'
+L32 |     lon_name = 'longitude'
+L33 |     
+L34 |     # Slice region
+L35 |     ds_region = ds.sel(
+L36 |         latitude=slice(region["lat_min"], region["lat_max"]),
+L37 |         longitude=slice(region["lon_min"], region["lon_max"])
+L38 |     )
+L39 |     
+L40 |     # Time slices
+L41 |     # Baseline windows: 1991-12-27 to 2003-01-05
+L42 |     # Target: 2007-06-01 to 2007-08-31
+L43 |     ds_baseline_ext = ds_region.sel(time=slice("1991-12-27", "2003-01-05")).load()
+L44 |     ds_target = ds_region.sel(time=slice(target_start_str, target_end_str)).load()
+L45 | 
+L46 | # Convert to float64
+L47 | sst_baseline_ext = ds_baseline_ext[var_name].astype(np.float64)
+L48 | sst_target = ds_target[var_name].astype(np.float64)
+L49 | target_times = ds_target.time.values
+L50 | target_lats = ds_target.latitude.values
+L51 | target_lons = ds_target.longitude.values
+L52 | 
+L53 | # 2. Sea cells: SST is finite on every day of the target period
+L54 | # target_sst shape: (time, lat, lon)
+L55 | target_sst_vals = sst_target.values
+L56 | # Mask: True if finite for all t
+L57 | is_sea = np.all(np.isfinite(target_sst_vals), axis=0)
+L58 | 
+L59 | # 3. Threshold and Climatology
+L60 | baseline_dates = pd.to_datetime(sst_baseline_ext.time.values)
+L61 | baseline_core_dates = baseline_dates[(baseline_dates >= pd.Timestamp(baseline_start_str)) & 
+L62 |                                      (baseline_dates <= pd.Timestamp(baseline_end_str))]
+L63 | 
+L64 | n_lat = len(target_lats)
+L65 | n_lon = len(target_lons)
+L66 | thresholds = np.full((n_lat, n_lon, 366), np.nan, dtype=np.float64)
+L67 | climatologies = np.full((n_lat, n_lon, 366), np.nan, dtype=np.float64)
+L68 | 
+L69 | # Map of dates to indices for fast lookup
+L70 | date_to_idx = {date: i for i, date in enumerate(baseline_dates)}
+L71 | 
+L72 | for d in range(1, 367):
+L73 |     if d == 60:
+L74 |         continue
+L75 |     
+L76 |     # Pool indices
+L77 |     pool_indices = []
+L78 |     for t_base in baseline_core_dates:
+L79 |         if get_doy_custom(t_base) == d:
+L80 |             for offset in range(-5, 6):
+L81 |                 t_window = t_base + timedelta(days=offset)
+L82 |                 if t_window in date_to_idx:
+L83 |                     pool_indices.append(date_to_idx[t_window])
+L84 |     
+L85 |     if pool_indices:
+L86 |         pool_data = sst_baseline_ext.values[pool_indices, :, :] # (len(pool), lat, lon)
+L87 |         # 90th percentile (hazen) and mean
+L88 |         thresholds[:, :, d-1] = np.nanquantile(pool_data, 0.9, axis=0, method='hazen')
+L89 |         climatologies[:, :, d-1] = np.nanmean(pool_data, axis=0)
+L90 | 
+L91 | # Handle day 60: mean of 59 and 61
+L92 | thresholds[:, :, 59] = (thresholds[:, :, 58] + thresholds[:, :, 60]) / 2
+L93 | climatologies[:, :, 59] = (climatologies[:, :, 58] + climatologies[:, :, 60]) / 2
+L94 | 
+L95 | # Smoothing: 31-day centred moving mean
+L96 | def smooth_366(arr):
+L97 |     smoothed = np.zeros_like(arr)
+L98 |     for d in range(366):
+L99 |         indices = [(d + offset) % 366 for offset in range(-15, 16)]
+L100|         # Using nanmean to handle any remaining NaNs
+L101|         smoothed[:, :, d] = np.nanmean(arr[:, :, indices], axis=-1)
+L102|     return smoothed
+L103| 
+L104| thresholds_smooth = smooth_366(thresholds)
+L105| climatologies_smooth = smooth_366(climatologies)
+L106| 
+L107| # 4. Per-cell MHWs
+L108| target_dates = pd.to_datetime(target_times)
+L109| target_doys = np.array([get_doy_custom(t) for t in target_dates])
+L110| 
+L111| # hot_mask: (time, lat, lon)
+L112| hot_mask = np.zeros(target_sst_vals.shape, dtype=bool)
+L113| for t_idx, doy in enumerate(target_doys):
+L114|     thresh_day = thresholds_smooth[:, :, doy-1]
+L115|     sst_day = target_sst_vals[t_idx, :, :]
+L116|     hot_mask[t_idx, :, :] = sst_day >= thresh_day
+L117| 
+L118| mhw_mask = np.zeros(target_sst_vals.shape, dtype=np.uint8)
+L119| 
+L120| for i in range(n_lat):
+L121|     for j in range(n_lon):
+L122|         if not is_sea[i, j]:
+L123|             continue
+L124|             
+L125|         cell_hot = hot_mask[:, i, j]
+L126|         temp_mhw = np.zeros(len(cell_hot), dtype=bool)
+L127|         
+L128|         # Find runs >= 5
+L129|         start = None
+L130|         for t in range(len(cell_hot)):
+L131|             if cell_hot[t] and start is None:
+L132|                 start = t
+L133|             elif not cell_hot[t] and start is not None:
+L134|                 if t - start >= 5:
+L135|                     temp_mhw[start:t] = True
+L136|                 start = None
+L137|         if start is not None and len(cell_hot) - start >= 5:
+L138|             temp_mhw[start:] = True
+L139|             
+L140|         # Join gaps of 1 or 2
+L141|         while True:
+L142|             changed = False
+L143|             # Check gap of 1
+L144|             for t in range(1, len(temp_mhw) - 1):
+L145|                 if not temp_mhw[t] and temp_mhw[t-1] and temp_mhw[t+1]:
+L146|                     temp_mhw[t] = True
+L147|                     changed = True
+L148|             # Check gap of 2
+L149|             for t in range(1, len(temp_mhw) - 2):
+L150|                 if not temp_mhw[t] and not temp_mhw[t+1] and temp_mhw[t-1] and temp_mhw[t+2]:
+L151|                     temp_mhw[t] = True
+L152|                     temp_mhw[t+1] = True
+L153|                     changed = True
+L154|             if not changed:
+L155|                 break
+L156|         
+L157|         mhw_mask[:, i, j] = temp_mhw.astype(np.uint8)
+L158| 
+L159| # 5. Regional Events
+L160| active_days = np.any(mhw_mask == 1, axis=(1, 2))
+L161| regional_events = []
+L162| start = None
+L163| for t in range(len(active_days)):
+L164|     if active_days[t] and start is None:
+L165|         start = t
+L166|     elif not active_days[t] and start is not None:
+L167|         regional_events.append({
+L168|             "onset": target_dates[start].strftime("%Y-%m-%d"),
+L169|             "end": target_dates[t-1].strftime("%Y-%m-%d")
+L170|         })
+L171|         start = None
+L172| if start is not None:
+L173|     regional_events.append({
+L174|         "onset": target_dates[start].strftime("%Y-%m-%d"),
+L175|         "end": target_dates[-1].strftime("%Y-%m-%d")
+L176|     })
+L177| 
+L178| # Save output
+L179| os.makedirs("output", exist_ok=True)
+L180| mhw_ds = xr.Dataset(
+L181|     {"mhw": (("time", "latitude", "longitude"), mhw_mask)},
+L182|     coords={"time": target_times, "latitude": target_lats, "longitude": target_lons}
+L183| )
+L184| mhw_ds.to_netcdf("output/mhw_mask.nc")
+L185| 
+L186| report = {
+L187|     "region": region,
+L188|     "baseline_analysed": {
+L189|         "start": baseline_core_dates[0].strftime("%Y-%m-%d"),
+L190|         "end": baseline_core_dates[-1].strftime("%Y-%m-%d")
+L191|     },
+L192|     "target_analysed": {
+L193|         "start": target_dates[0].strftime("%Y-%m-%d"),
+L194|         "end": target_dates[-1].strftime("%Y-%m-%d")
+L195|     },
+L196|     "events": regional_events,
+L197|     "complete": True,
+L198|     "caveats": ""
+L199| }
+L200| with open("output/report.json", "w") as f:
+L201|     json.dump(report, f)
+L202| 
+L203| print("Processing complete.")
+--- stdout ---
+Processing complete.
+--- stderr ---
+/usr/local/lib/python3.12/site-packages/numpy/lib/_nanfunctions_impl.py:1593: RuntimeWarning: All-NaN slice encountered
+  return fnb._ureduce(a,
+<stdin>:89: RuntimeWarning: Mean of empty slice
+<stdin>:101: RuntimeWarning: Mean of empty slice
+
+## Files the run wrote (final sizes)
+
+- output/mhw_mask.nc: 340608 bytes
+- output/report.json: 307 bytes

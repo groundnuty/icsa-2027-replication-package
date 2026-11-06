@@ -1,0 +1,25 @@
+import json
+
+report = {
+    "region": {"lat_min": 56.63, "lat_max": 57.83, "lon_min": 20.23, "lon_max": 21.43},
+    "baseline_analysed": {"start": "1991-12-27", "end": "2003-01-05"},
+    "target_analysed": {"start": "2010-06-01", "end": "2010-08-31"},
+    "events": [{"onset": "2010-06-29", "end": "2010-08-26"}],
+    "complete": True,
+    "caveats": ("Baseline window reported as the exact span of calendar days used to build the "
+                "per-cell 90th-percentile thresholds and climatologies: baseline years 1992-2002 "
+                "plus up to 5 days beyond each end (1991-12-27..1991-12-31 and 2003-01-01..2003-01-05) "
+                "that fall inside the +/-5-day pools. Thresholds use MATLAB-quantile ('hazen') "
+                "percentiles of +/-5-day day-of-year pools; day 60 set to mean of days 59/61; "
+                "circular centred 31-day moving-mean smoothing; per-cell hot days are SST >= "
+                "threshold, MHWs are >=5-day hot runs joined across gaps of 1-2 non-hot days; "
+                "regional events are maximal runs of days with at least one sea cell in a per-cell MHW.")
+}
+with open('/work/output/report.json', 'w') as fh:
+    json.dump(report, fh, indent=2)
+
+# verify
+r = json.load(open('/work/output/report.json'))
+print(json.dumps(r, indent=2))
+assert set(r.keys()) == {"region","baseline_analysed","target_analysed","events","complete","caveats"}
+print("\nfiles in output:", __import__('os').listdir('/work/output'))

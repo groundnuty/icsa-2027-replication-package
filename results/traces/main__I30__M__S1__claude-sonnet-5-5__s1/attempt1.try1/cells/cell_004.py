@@ -1,0 +1,1 @@
+print(np.nanmean(r0[0]))

@@ -67,4 +67,4 @@ So the scripted warm_buffer condition leaves the same audit lines as cold. A rea
 - `Duration` and `OriginDuration` are integers in nanoseconds.
 - `request_Range`, `request_X-Icsa-Run` and `request_User-Agent` are present.
 - `RequestPath` carries no query string.
-- `ClientHost` is 198.51.100.27 on every line.
+- `ClientHost` is 198.51.100.185 on every line.

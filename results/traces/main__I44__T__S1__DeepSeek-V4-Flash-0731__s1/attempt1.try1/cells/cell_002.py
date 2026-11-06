@@ -1,0 +1,8 @@
+import fsspec
+import xarray as xr
+fs = fsspec.filesystem('onedata')
+path = 'icsa2027_data_20261101T090944Z/s1z/sst_20040601.nc'
+with fs.open(path, 'rb') as f:
+    ds = xr.open_dataset(f, engine='h5netcdf')
+    print(ds)
+    print(ds.variables)
