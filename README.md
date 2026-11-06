@@ -65,15 +65,20 @@ There are three ways to use this package:
 `make check` runs three steps:
 
 1. `reproduce/checksums.py` verifies every file against `checksums.sha256`.
-2. `reproduce/regenerate.py` reads `results/analysis/<snapshot>/pipeline/` (one scored row per analysed run, the coded causes, the cause flags, the
-   infrastructure export) and `results/analysis/<snapshot>/inputs/` (the counted start of each run, the enforcement overhead, the fault-injection fidelity rows and
-   H3 table, the coders' inspection labels and coverage). It then repeats what the snapshot tool did after scoring: it recounts the cohort against the
-   snapshot's cut, calls the pre-registered analysis (`icsa.analysis.run.run_all`) with the default configuration, and stamps each table with the
-   snapshot's header line.
-3. It compares every regenerated file with the shipped one under `results/analysis/<snapshot>/tables/`. Tables must be byte-identical. The manifest is compared field by
+2. `reproduce/regenerate.py` regenerates each result folder of the fixed snapshot, `results/analysis/<snapshot>/<folder>/`: `out` (the frozen run) and
+   `out-coded` (with the coders' inspection labels), and `out-kaug` and `out-coded-kaug`, the same two with the runs that reached the time cap counted
+   as K (`PRIMARY.json` names which tables are the primary ones). For each it reads `pipeline/` (one scored row per analysed run, the coded causes,
+   the cause flags, the infrastructure export) and `inputs/` (the counted start of each run, the enforcement overhead, the fault-injection fidelity
+   rows and H3 table, the coders' inspection labels and coverage, and for a K-augmented folder the capped runs). It then repeats what the snapshot
+   tool did after scoring: it recounts the cohort against the snapshot's cut, calls the pre-registered analysis (`icsa.analysis.run.run_all`) with
+   the default configuration (for a K-augmented folder with the capped runs added as K rows, as the snapshot's K-augmentation step did; the
+   docstring of `regenerate.py` describes it), and stamps each table with the snapshot's header line. The recount and the K-augmentation are each
+   checked against the counts the snapshot recorded.
+3. It compares every regenerated file with the shipped one under `<folder>/tables/`. Tables must be byte-identical. The manifest is compared field by
    field: the fields that name the checkout and the Python and library versions are reported, not compared, and so is a hash of an input that the
    anonymisation rewrote after the analysis read it. A figure whose bytes differ is reported, not failed, because PNG bytes depend on the plotting
-   library's build. `<snapshot>` is the snapshot's folder name; there is one.
+   library's build. The last line reads `check: all N result folders passed`. A folder that ships no `inputs/` (a sensitivity analysis) is listed
+   as shipped, not regenerated; a folder that `PRIMARY.json` names must be regenerated.
 
 The scored rows themselves come from the run directories through the scoring pipeline (`icsa/pipeline`, `icsa/scoring`, `snapshot/run.py`); the run
 directories are not shipped whole (see below), so this step is checked on the sampled traces, not regenerated.
@@ -83,7 +88,7 @@ directories are not shipped whole (see below), so this step is checked on the sa
 - `results/traces/`: up to ten whole runs per option × layout × model (`BUILD-REPORT.md` says if the sample was cut to fit, and to how many), chosen by a seeded order of the run keys alone, from the runs that had ended. Each
   archive holds the run's whole directory (every attempt): the agent's transcript, the code it ran, the instruments' records and the run record; the
   raw read-performance logs are replaced by a per-run summary. Model API signatures, platform file identifiers and host names are replaced by labels;
-  `VERIFICATION.md` lists every rule. The run's scored row is the line with its key in `results/analysis/<snapshot>/pipeline/scored_rows.jsonl`.
+  `VERIFICATION.md` lists every rule. The run's scored row is the line with its key in `results/analysis/<snapshot>/out/pipeline/scored_rows.jsonl`.
 - `results/coding/`: the blind inspection of the runs whose label the instruments could not settle: the coders' decisions with their extents and
   extractions, the agreement between the two coders, the numeric replay of their extents, and the known-answer set that scored the coders. The second
   coder's packets and codebook are included; the key that maps a packet to its run is not, while the sheet is still being read blind.

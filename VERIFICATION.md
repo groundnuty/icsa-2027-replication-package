@@ -10,17 +10,17 @@ file of the anonymising build with its sha256 and the purpose of the entry it be
 
 ## Tables
 
-`make check` regenerates every analysis table of the fixed snapshot from `results/analysis/<snapshot>/pipeline/` and `results/analysis/<snapshot>/inputs/` and compares it
-byte for byte with `results/analysis/<snapshot>/tables/` (README, "Results only"). The analysis is deterministic: its bootstrap is seeded from the configuration.
-`results/analysis/<snapshot>/inputs/inputs.json` names the source of every input in the snapshot and its sha256, and the recount of the cohort is checked against
-the totals the snapshot recorded. The tables' `manifest.json` is compared field by field: the fields that name the checkout and the Python
+`make check` regenerates every analysis table of each result folder of the fixed snapshot from `results/analysis/<snapshot>/<folder>/pipeline/` and
+`.../<folder>/inputs/` and compares it byte for byte with `.../<folder>/tables/` (README, "Results only"). The analysis is deterministic: its bootstrap is seeded from the configuration.
+Each `.../<folder>/inputs/inputs.json` names the source of every input in the snapshot and its sha256; the recount of the cohort is checked against
+the totals the snapshot recorded, and the K-augmentation against the counts the snapshot's K step logged. The tables' `manifest.json` is compared field by field: the fields that name the checkout and the Python
 and library versions are reported, not compared, and an input hash is compared only when the shipped input still has that hash.
 
 ## Code
 
 The code was compared with the code that ran. `BUILD-REPORT.md`, "What ran, and how this tree differs", names the commit that ran for each part of
 `icsa/`, lists the files that differ from it before anonymisation, and lists the files that the anonymisation rewrote: applying the same mapping to the
-file that ran gives exactly the file shipped here. The fixed snapshot records the code it ran (`results/analysis/<snapshot>/SNAPSHOT.json`, `snapshot_code`).
+file that ran gives exactly the file shipped here. The fixed snapshot records the code it ran (`results/analysis/<snapshot>/<folder>/SNAPSHOT.json`, `snapshot_code`).
 
 ## Anonymity and secrets
 

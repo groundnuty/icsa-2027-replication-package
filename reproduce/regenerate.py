@@ -2,13 +2,19 @@
 
     uv run python reproduce/regenerate.py [--snapshot results/analysis/<snapshot>] [--out build/tables] [--check]
 
-This repeats, step by step, what the snapshot tool (`snapshot/run.py`, function `analyse`) did after its pipeline had scored the runs:
+The snapshot's folder holds one result folder per analysis (`out`, `out-coded`, `out-kaug`, `out-coded-kaug`, ...; `PRIMARY.json` names the primary
+tables), or, in an older layout, the result files themselves. Every result folder that ships an `inputs/` folder is regenerated into `<out>/<folder>/`;
+a folder without one is listed as shipped, not regenerated, and a folder named in `PRIMARY.json` must have one. For each, this repeats what the
+snapshot tool (`snapshot/run.py`, `do_analyse`) did after its pipeline had scored the runs:
 
 1. read the scored rows (`pipeline/scored_rows.jsonl`), the coded causes, the cause flags and the infrastructure export;
 2. recompute each row's `out_of_cohort` against the snapshot's cohort cut (`snapshot/recohort.py`), from the counted start of every run
    (`inputs/counted_starts.csv`) instead of the campaign store, which is not shipped;
 3. load the enforcement overhead, the fault-injection fidelity rows and H3 table, and the coders' inspection labels and coverage, as the snapshot did;
-4. call the pre-registered analysis (`icsa.analysis.run.run_all`) with the default configuration;
+4. call the pre-registered analysis (`icsa.analysis.run.run_all`) with the default configuration; for a K-augmented folder (`inputs.json` lists
+   `capped_runs`), as the snapshot's K-augmentation step did (`kaug_runs` below): the runs that reached the time cap and were counted by the capped
+   correction are added to every frame of the scored rows as K rows (no measures), and taken out of the infrastructure account so that they are not
+   counted twice;
 5. put the snapshot's header line first in every table (`snapshot/stamp.py`).
 
 With `--check`, every file under the shipped `tables/` is compared with the regenerated one. Tables (.csv, .md) must be byte-identical; a table with
@@ -20,11 +26,13 @@ The last line reads `check: all N tables byte-identical to the shipped files` wh
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import dataclasses
 import filecmp
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -63,6 +71,45 @@ def recohort(rows, starts_csv: pathlib.Path, cohort_cut: str):
     return out, info
 
 
+@contextlib.contextmanager
+def kaug_runs(capped_runs: list[str], cfg):
+    """The snapshot's K-augmentation step (its `kaug_wrap.py`, run as `python kaug_wrap.py analyse ...` for `out-kaug` and `out-coded-kaug`), repeated:
+    while the analysis runs, every frame built from the scored rows (`adapter.rows_to_frame`) gets the K rows (`infra.exhausted_frame`) of the capped
+    runs in the primary scope (`infra.exhausted_scope`), limited to the frame's blocks; the analysis is given the infrastructure account without those
+    runs. Yields the function that turns the infrastructure export's path into that account."""
+    import pandas as pd
+    import icsa.analysis.adapter as A
+    import icsa.analysis.infra as I
+    import icsa.analysis.run  # noqa: F401  (imported before the patch, as the snapshot's step did)
+    keys = set(capped_runs)
+    orig_r2f = A.rows_to_frame
+    state = {}
+
+    def account(infra_path):
+        acc = I.coerce(infra_path)
+        cap = tuple(e for e in acc.exhausted if e["run_key"] in keys)
+        rest = dataclasses.replace(acc, exhausted=tuple(e for e in acc.exhausted if e["run_key"] not in keys))
+        kept, _ = I.exhausted_scope(dataclasses.replace(acc, exhausted=cap), cfg)
+        state["kframe"] = I.exhausted_frame(kept)
+        state["found"] = len(cap)
+        return rest
+
+    def r2f(rws, c, blocks=None, *a, **k):
+        df = orig_r2f(rws, c, blocks, *a, **k)
+        kframe = state.get("kframe")
+        if kframe is None or not len(kframe):
+            return df
+        allowed = set(blocks) if blocks is not None else set(c["blocks"]["primary"])
+        extra = kframe[kframe["block"].isin(allowed)]
+        return pd.concat([df, extra], ignore_index=True) if len(extra) else df
+
+    A.rows_to_frame = r2f
+    try:
+        yield account, state
+    finally:
+        A.rows_to_frame = orig_r2f
+
+
 def regenerate(snap: pathlib.Path, out: pathlib.Path) -> dict:
     import pandas as pd
     from icsa.analysis import adapter, config as cfgmod, inspection as INS, overhead as OV
@@ -93,13 +140,24 @@ def regenerate(snap: pathlib.Path, out: pathlib.Path) -> dict:
         want = inputs.get("recohort_totals")
         if want and {k: want[k] for k in info} != info:
             raise SystemExit(f"recohort gives {info}, the snapshot recorded {want}: the inputs do not match the snapshot")
-    run_all(rows, out, cfg, pd.read_csv(pdir / "causes.csv"), fidelity_rows=fid,
-            h3_table=pd.read_csv(h3_path) if h3_path else None,
-            cause_flags=pd.read_csv(pdir / "cause_flags.csv"), infra=pdir / "infra.json", overhead=ov, inspection=ins, audit=None)
+    capped = inputs.get("capped_runs")
+    kaug = None
+    with (kaug_runs(capped, cfg) if capped is not None else contextlib.nullcontext()) as k:
+        infra = pdir / "infra.json"
+        if k is not None:
+            account, state = k
+            infra = account(infra)
+            kaug = {"capped_runs_listed": len(capped), "found_in_the_account": state["found"], "k_rows_added": len(state["kframe"])}
+            want = inputs.get("kaug_totals")
+            if want and {x: want.get(x) for x in kaug} != kaug:
+                raise SystemExit(f"K-augmentation gives {kaug}, the snapshot recorded {want}: the inputs do not match the snapshot")
+        run_all(rows, out, cfg, pd.read_csv(pdir / "causes.csv"), fidelity_rows=fid,
+                h3_table=pd.read_csv(h3_path) if h3_path else None,
+                cause_flags=pd.read_csv(pdir / "cause_flags.csv"), infra=infra, overhead=ov, inspection=ins, audit=None)
     line = stamp.header(bool(meta["final"]), meta["t"])
     stamp.stamp_tables(out, line)
     stamp.check_tables(out, line)
-    return {"rows": len(rows), "recohort": info, "files": sum(1 for p in out.rglob("*") if p.is_file())}
+    return {"rows": len(rows), "recohort": info, "kaug": kaug, "files": sum(1 for p in out.rglob("*") if p.is_file())}
 
 
 # manifest.json fields that describe the machine or the checkout the analysis ran in, not its result: reported, never compared.
@@ -172,9 +230,16 @@ def compare(shipped: pathlib.Path, made: pathlib.Path, snap: pathlib.Path) -> in
     return 0
 
 
+def _units(snap: pathlib.Path) -> list[pathlib.Path]:
+    """The result folders of a snapshot folder: the folder itself (older layout: SNAPSHOT.json directly in it), else every `out*` folder with a SNAPSHOT.json."""
+    if (snap / "SNAPSHOT.json").is_file():
+        return [snap]
+    return sorted(p.parent for p in snap.glob("out*/SNAPSHOT.json"))
+
+
 def find_snapshot(analysis: pathlib.Path) -> pathlib.Path | str:
-    """The one snapshot folder under results/analysis/ (the one holding SNAPSHOT.json), or why there is none to use."""
-    found = sorted(p.parent for p in analysis.glob("*/SNAPSHOT.json"))
+    """The one snapshot folder under results/analysis/ (holding SNAPSHOT.json, or out*/SNAPSHOT.json), or why there is none to use."""
+    found = sorted(p for p in analysis.glob("*") if p.is_dir() and _units(p)) if analysis.is_dir() else []
     if not found:
         return f"no snapshot under {analysis}: the results of the fixed snapshot are not in this copy yet (see MISSING.md)"
     if len(found) > 1:
@@ -182,9 +247,27 @@ def find_snapshot(analysis: pathlib.Path) -> pathlib.Path | str:
     return found[0]
 
 
+def _primary_named(snap: pathlib.Path) -> set[str]:
+    p = snap / "PRIMARY.json"
+    if not p.is_file():
+        return set()
+
+    def strings(o):
+        if isinstance(o, str):
+            yield o
+        elif isinstance(o, dict):
+            for k, v in o.items():
+                yield str(k)
+                yield from strings(v)
+        elif isinstance(o, list):
+            for v in o:
+                yield from strings(v)
+    return {s for s in strings(json.loads(p.read_text(encoding="utf-8"))) if re.fullmatch(r"out[A-Za-z0-9_-]*", s)}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--snapshot", type=pathlib.Path, help="the snapshot's folder (default: the one folder under results/analysis/ with a SNAPSHOT.json)")
+    ap.add_argument("--snapshot", type=pathlib.Path, help="the snapshot's folder (default: the one folder under results/analysis/)")
     ap.add_argument("--out", type=pathlib.Path, default=ROOT / "build" / "tables")
     ap.add_argument("--check", action="store_true", help="compare the regenerated tables with the shipped ones")
     a = ap.parse_args(argv)
@@ -194,13 +277,33 @@ def main(argv=None) -> int:
             print(found, file=sys.stderr)
             return 2
         a.snapshot = found
-    if not (a.snapshot / "SNAPSHOT.json").is_file():
-        print(f"no SNAPSHOT.json in {a.snapshot}", file=sys.stderr)
+    units = _units(a.snapshot)
+    if not units:
+        print(f"no SNAPSHOT.json in {a.snapshot} or its out*/ folders", file=sys.stderr)
         return 2
-    res = regenerate(a.snapshot, a.out)
-    print(f"regenerated {res['files']} files from {res['rows']} scored rows into {a.out}"
-          + (f"; recohort: {res['recohort']}" if res["recohort"] else ""))
-    return compare(a.snapshot / "tables", a.out, a.snapshot) if a.check else 0
+    single = units == [a.snapshot]
+    todo = [u for u in units if (u / "inputs" / "inputs.json").is_file()]
+    skipped = [u.name for u in units if u not in todo]
+    unchecked_primary = sorted(_primary_named(a.snapshot) & set(skipped))
+    if unchecked_primary:
+        print(f"PRIMARY.json names result folders that ship no inputs/, so they cannot be regenerated: {', '.join(unchecked_primary)}", file=sys.stderr)
+        return 2
+    if not todo:
+        print(f"no result folder in {a.snapshot} ships inputs/: nothing can be regenerated", file=sys.stderr)
+        return 2
+    if skipped:
+        print(f"shipped, not regenerated (no inputs/): {', '.join(skipped)}")
+    rc = 0
+    for u in todo:
+        dest = a.out if single else a.out / u.name
+        res = regenerate(u, dest)
+        print(f"{'' if single else u.name + ': '}regenerated {res['files']} files from {res['rows']} scored rows"
+              + (f"; recohort: {res['recohort']}" if res["recohort"] else "") + (f"; K-augmentation: {res['kaug']}" if res["kaug"] else ""))
+        if a.check:
+            rc |= compare(u / "tables", dest, u)
+    if a.check and not single:
+        print(f"check: {'all ' + str(len(todo)) + ' result folders passed' if rc == 0 else 'FAILED'} ({', '.join(u.name for u in todo)})")
+    return rc
 
 
 if __name__ == "__main__":

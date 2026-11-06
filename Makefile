@@ -1,5 +1,5 @@
 # Replication package: one command checks the files and regenerates the analysis tables of the fixed snapshot.
-#   make check     verify checksums.sha256, then regenerate every table and compare it with the shipped one
+#   make check     verify checksums.sha256, then regenerate every table of every result folder and compare it with the shipped one
 #   make verify    checksums.sha256 only (standard library, no dependencies)
 #   make tables    regenerate the tables into build/tables without comparing
 #   make equality  the knowledge-plane equality table, from results/knowledge
