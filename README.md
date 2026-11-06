@@ -92,7 +92,8 @@ directories are not shipped whole (see below), so this step is checked on the sa
   `VERIFICATION.md` lists every rule. The run's scored row is the line with its key in `results/analysis/<snapshot>/out/pipeline/scored_rows.jsonl`.
 - `results/coding/`: the blind inspection of the runs whose label the instruments could not settle: the coders' decisions with their extents and
   extractions, the agreement between the two coders, the numeric replay of their extents, and the known-answer set that scored the coders. The second
-  coder's packets and codebook are included; the key that maps a packet to its run is not, while the sheet is still being read blind.
+  coder's packets, codebook and answers are included; the key that maps a second-coder packet to its run is not. The human readers' check, its answers and its key are in
+  `results/coding/coder_check/`.
 - `results/validation/9-instruments/`, `results/faults-live/`, `results/faults-batch/`: the instruments checked against known answers, and the
   fault-injection calibration of the platform's read record per option.
 - `reports/refdet/`, `results/reference-validation/`: the reference detector checked against the original implementation.

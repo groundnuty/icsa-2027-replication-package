@@ -45,7 +45,7 @@ Region means of model means; omission over finished runs labelled complete or om
 - **edge day only:** 190 of 299 miss only an edge day of the baseline window;
 - **undisclosed:** 278 of 299 reported themselves complete;
 - **false alarms:** 13 of 337 finished runs on event-free instances;
-- **edge-day effect:** in 212 runs whose only shortfall is baseline edge days, no detected event changed. The largest threshold shift was 0.02 K for one edge day per year, and at most 1.3 K in the 22 runs with wider gaps (`coder_replay` edge table in the snapshot).
+- **edge-day effect:** in 212 runs whose only shortfall is baseline edge days, no detected event changed. The largest threshold shift was 0.02 K for one edge day per year, and at most 1.3 K in the 22 runs with wider gaps (`results/coding/coder_replay/coder_edge.csv`).
 
 ## 3. Contrasts between options (Table VI, Fig. contrasts)
 
@@ -111,7 +111,14 @@ Finished omitting runs, by cause:
 
 **Sources:** tokens and bytes from `out-coded/tables/cost_table.csv`. Wall time and bytes cover the runs whose bytes were measured, which is the environment that ran every option. The wall-time medians come from the per-run rows (`gen_final_tables.py`).
 
-## 7. Validity of the labels (Table VI, checks)
+## 7. Validity of the reference and the labels (Table VI, checks)
+
+**The reference:**
+- **same events and dates as the catalogue authors' code:** 154 of 154 on identical input, with identical onset and end dates (`results/reference-validation/octave-domain/RESULT.md`, `domain.json`; made by `octave_domain/`);
+- **published events both match exactly:** 21 of 189; 179 of the 189 overlap an event (same file);
+- **a scripted program written from the prompt, with no model, reproduces the reference:** 240 of 240 cells, all 50 instances in S2 and 10 in S1, through each of the four data paths (`results/validation/oracle-table.csv`).
+
+**The labels:**
 
 - **coder agreement:** 1,967 of 2,058 packets, 95.6% [94.6, 96.4] (`results/coding/inspection/pair_kappa.csv`, rows R+C);
 - **replay,** labels whose result matches the reference exactly:
@@ -119,7 +126,7 @@ Finished omitting runs, by cause:
   - omitting: 0 of 183 (`coder_replay.csv`, `f1_extent` ≥ 0.99999);
 - **second coder:** κ 0.79 on 88 rows; 0.65 on the 60 not decided by how the run ended; 0.92 counting either code in the one case the codebook gives to two codes (`results/coding/inspection/second_coder_kappa.json`);
 - **known answers:** 0 of 54 omitting cases called complete by both coders, for both coder pairs (`results/coding/k/`);
-- **human readers:** 18 of 18 decided runs agree with the coders (`results/coding/coder_check/`).
+- **human readers:** 18 of 18 decided runs agree with the coders (`results/coding/coder_check/coder-check-answers.csv` against `coder-check-key.json`).
 
 Intervals are Wilson 95%.
 
@@ -168,7 +175,7 @@ Measured by script in S2 only, 5 interleaved pairs per option, one run at a time
 - D: +26.7 s [25.6, 28.3] (114 s against 87 s);
 - M: +0.4 s [−1.5, 1.7].
 
-S1 wasn't measured.
+S1 wasn't measured. Source: `out-coded-kaug/tables/wall_time_with_overhead.csv`, which `make check` regenerates.
 
 ## 11. Power
 
@@ -191,6 +198,8 @@ Under `final-20261106T0900Z-sens/` (`out-retries`, `out-lab504`, `out-050`), aga
 - the registered 00:50Z cohort cut.
 
 **Tokens in S1 stay significant in all three:** A / M ×1.27–1.28 and D / M ×1.25–1.27. **No event-F1 contrast becomes significant.** These sensitivities don't carry the coders' labels, so they don't test omission.
+
+**Not a result:** `side-added-after-data/extent_account_differs.csv` shows nearly every run as "differs", because the agents' reports rarely state an extent in a form that can be compared, so the day differences are null. It doesn't show that agents claimed more than they analysed, and the paper doesn't use it.
 
 ## Per-run figures
 
