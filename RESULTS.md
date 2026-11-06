@@ -124,7 +124,7 @@ Finished omitting runs, by cause:
 - **replay,** labels whose result matches the reference exactly:
   - complete: 1,268 of 1,344, 94.3% [93.0, 95.5];
   - omitting: 0 of 183 (`coder_replay.csv`, `f1_extent` ≥ 0.99999);
-- **second coder:** κ 0.79 on 88 rows; 0.65 on the 60 not decided by how the run ended; 0.92 counting either code in the one case the codebook gives to two codes (`results/coding/inspection/second_coder_kappa.json`);
+- **second coder:** κ 0.79 on 88 rows; 0.65 on the 60 not decided by how the run ended; 0.92 counting either code in the one case the codebook gives to two codes (`results/coding/inspection/second_coder_kappa.json`; recompute from `results/coding/second_coder/key.csv` and the answers beside it);
 - **known answers:** 0 of 54 omitting cases called complete by both coders, for both coder pairs (`results/coding/k/`);
 - **human readers:** 18 of 18 decided runs agree with the coders (`results/coding/coder_check/coder-check-answers.csv` against `coder-check-key.json`).
 
